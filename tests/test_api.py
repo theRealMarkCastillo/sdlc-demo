@@ -365,6 +365,9 @@ class _FakeConnCursorError:
     def cursor(self):
         raise psycopg2.OperationalError("cursor failed")
 
+    def rollback(self):
+        pass
+
     def close(self):
         pass
 
@@ -487,5 +490,123 @@ def test_create_user_rollback_raises(monkeypatch):
             "email": "test@example.com",
             "age": 30,
         })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_create_user_fetchone_returns_none(monkeypatch):
+    """POST /api/users returns 503 when INSERT...RETURNING yields no row."""
+    import app as app_module
+
+    class FakeCursor:
+        def execute(self, *args, **kwargs):
+            pass
+        def fetchone(self):
+            return None  # forces the null-check path at app.py:96-98
+        def close(self):
+            pass
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(app_module, "get_db", lambda: FakeConn())
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "test", "email": "t@t.com", "age": 30,
+        })
+        assert r.status_code == 503
+
+
+# --- get_user deep error paths ---
+
+
+def test_get_user_cursor_raises(monkeypatch):
+    """GET /api/users/<id> returns 503 when conn.cursor() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users/1")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_get_user_execute_raises(monkeypatch):
+    """GET /api/users/<id> returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users/1")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_get_user_fetchone_raises(monkeypatch):
+    """GET /api/users/<id> returns 503 when cur.fetchone() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users/1")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+# --- deactivate_user deep error paths ---
+
+
+def test_deactivate_user_cursor_raises(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when conn.cursor() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_deactivate_user_execute_raises(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_deactivate_user_fetchone_raises(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when cur.fetchone() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_deactivate_user_commit_raises(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when conn.commit() raises (rollback succeeds)."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"

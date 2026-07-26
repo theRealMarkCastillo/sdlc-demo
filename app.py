@@ -58,7 +58,7 @@ def list_users():
         cur.execute("SELECT id, username, email, age, active FROM users ORDER BY id")
         rows = cur.fetchall()
     except psycopg2.Error as e:
-        app.logger.error("DB error in list_users: %s", e)
+        app.logger.error("DB error in list_users: %s [%s]", type(e).__name__, getattr(e, 'pgcode', 'N/A'))
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
@@ -99,7 +99,7 @@ def create_user():
         user_id = row[0]
         conn.commit()
     except psycopg2.Error as e:
-        app.logger.error("DB error in create_user: %s", e)
+        app.logger.error("DB error in create_user: %s [%s]", type(e).__name__, getattr(e, 'pgcode', 'N/A'))
         if conn is not None:
             try:
                 conn.rollback()
@@ -149,7 +149,7 @@ def get_user(user_id: str):
         )
         row = cur.fetchone()
     except psycopg2.Error as e:
-        app.logger.error("DB error in get_user: %s", e)
+        app.logger.error("DB error in get_user: %s [%s]", type(e).__name__, getattr(e, 'pgcode', 'N/A'))
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
@@ -204,7 +204,7 @@ def deactivate_user(user_id: str):
         row = cur.fetchone()
         conn.commit()
     except psycopg2.Error as e:
-        app.logger.error("DB error in deactivate_user: %s", e)
+        app.logger.error("DB error in deactivate_user: %s [%s]", type(e).__name__, getattr(e, 'pgcode', 'N/A'))
         if conn is not None:
             try:
                 conn.rollback()
