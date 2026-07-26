@@ -638,6 +638,13 @@ def test_app_crashes_when_db_pass_missing(monkeypatch):
     with pytest.raises(RuntimeError):
         importlib.reload(app_module)
 
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
+
 
 def test_app_crashes_when_db_user_missing(monkeypatch):
     """app.py raises KeyError on import when DB_USER env var is not set."""
@@ -650,6 +657,13 @@ def test_app_crashes_when_db_user_missing(monkeypatch):
     with pytest.raises(RuntimeError):
         importlib.reload(app_module)
 
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
+
 
 def test_app_crashes_when_both_credentials_missing(monkeypatch):
     """app.py raises KeyError when both DB_USER and DB_PASS are missing."""
@@ -661,6 +675,13 @@ def test_app_crashes_when_both_credentials_missing(monkeypatch):
 
     with pytest.raises(RuntimeError):
         importlib.reload(app_module)
+
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
 
 
 def test_app_infra_vars_keep_defaults(monkeypatch):
@@ -678,6 +699,13 @@ def test_app_infra_vars_keep_defaults(monkeypatch):
     assert app_module.DB_HOST == "localhost"
     assert app_module.DB_PORT == "5432"
     assert app_module.DB_NAME == "sdlc_demo"
+
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
 
 
 def test_app_imports_cleanly_with_credentials_set():
@@ -1117,6 +1145,25 @@ def test_update_user_identity_mapping_not_configured(monkeypatch):
         assert "identity mapping not configured" in r.get_json()["error"]
 
 
+def _reload_app_with_env(**extra_env):
+    """Importlib-reload the app module with given env vars set (useful after
+    destructive reloads in crash tests). Existing env is preserved."""
+    import importlib
+    import app as app_module
+    old = {}
+    for k, v in extra_env.items():
+        old[k] = os.environ.get(k)
+        os.environ[k] = v
+    try:
+        importlib.reload(app_module)
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 def test_app_crashes_when_api_key_missing(monkeypatch):
     """app.py raises RuntimeError on import when SDLC_API_KEY is not set."""
     import importlib
@@ -1128,6 +1175,16 @@ def test_app_crashes_when_api_key_missing(monkeypatch):
 
     with pytest.raises(RuntimeError):
         importlib.reload(app_module)
+
+    # Reload with good env so subsequent tests get a clean module.
+    # monkeypatch restores env vars, but the module's globals may be stale
+    # from the partial (failed) reload above.
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
 
 
 def test_app_crashes_when_api_key_empty(monkeypatch):
@@ -1141,3 +1198,10 @@ def test_app_crashes_when_api_key_empty(monkeypatch):
 
     with pytest.raises(RuntimeError):
         importlib.reload(app_module)
+
+    _reload_app_with_env(
+        DB_USER="sdlc_user_test",
+        DB_PASS="sdlc_pass_test",
+        SDLC_API_KEY="test-api-key-for-sdlc-demo",
+        SDLC_API_KEY_USER_ID="1",
+    )
