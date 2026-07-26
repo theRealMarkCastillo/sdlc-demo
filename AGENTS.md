@@ -16,6 +16,7 @@
 - RESTful API design: proper status codes, JSON error responses
 - Never log PII
 - No hardcoded secrets — use env vars, no defaults for credentials (`os.environ.get("DB_USER")` — no second argument)
+- **Never source `.env` directly into your shell** — `set -a; source .env` pollutes the session, and Docker Compose prefers shell env vars over `.env` file values. Use `bash scripts/deploy.sh` which handles env cleanly.
 
 ## Security Rules (from SDLC-001 closed loop)
 - Type-coercion check: `isinstance(x, int)` accepts `bool`. Use `type(x) is int` or `isinstance(x, int) and not isinstance(x, bool)`.
