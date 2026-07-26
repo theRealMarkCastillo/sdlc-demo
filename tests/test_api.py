@@ -1,6 +1,8 @@
 """SDLC Demo tests."""
+import pytest
 import requests
 import os
+import psycopg2
 
 BASE_URL = os.environ.get("TEST_URL", "http://localhost:5000")
 
@@ -251,3 +253,227 @@ def test_get_user_db_unavailable(monkeypatch):
         assert r.status_code == 503
         data = r.get_json()
         assert data["error"] == "database unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Deep DB error path tests — cursor, execute, fetch, commit, rollback failures
+# ---------------------------------------------------------------------------
+
+
+class _FakeCursorExecuteError:
+    """Cursor that raises on execute()."""
+
+    def execute(self, *args, **kwargs):
+        raise psycopg2.OperationalError("execute failed")
+
+    def close(self):
+        pass
+
+
+class _FakeConnForExecute:
+    def cursor(self):
+        return _FakeCursorExecuteError()
+
+    def close(self):
+        pass
+
+
+class _FakeCursorFetchError:
+    """Cursor whose fetchone/fetchall raises."""
+
+    def execute(self, *args, **kwargs):
+        pass
+
+    def fetchone(self):
+        raise psycopg2.OperationalError("fetchone failed")
+
+    def fetchall(self):
+        raise psycopg2.OperationalError("fetchall failed")
+
+    def close(self):
+        pass
+
+
+class _FakeConnForFetch:
+    def cursor(self):
+        return _FakeCursorFetchError()
+
+    def close(self):
+        pass
+
+
+class _FakeCursorForCommit:
+    """Cursor that works, but the connection's commit will fail."""
+
+    def execute(self, *args, **kwargs):
+        pass
+
+    def fetchone(self):
+        return (42,)  # succeeds — triggers commit path
+
+    def close(self):
+        pass
+
+
+class _FakeConnCommitError:
+    """Connection where commit raises (triggers rollback in except)."""
+
+    def cursor(self):
+        return _FakeCursorForCommit()
+
+    def commit(self):
+        raise psycopg2.OperationalError("commit failed")
+
+    def rollback(self):
+        pass  # rollback succeeds
+
+    def close(self):
+        pass
+
+
+class _FakeConnCommitAndRollbackError:
+    """Connection where BOTH commit AND rollback raise."""
+
+    def cursor(self):
+        return _FakeCursorForCommit()
+
+    def commit(self):
+        raise psycopg2.OperationalError("commit failed")
+
+    def rollback(self):
+        raise psycopg2.OperationalError("rollback also failed")
+
+    def close(self):
+        pass
+
+
+class _FakeConnCursorError:
+    """Connection whose cursor() raises."""
+
+    def cursor(self):
+        raise psycopg2.OperationalError("cursor failed")
+
+    def close(self):
+        pass
+
+
+# --- list_users deep error paths ---
+
+
+def test_list_users_cursor_raises(monkeypatch):
+    """GET /api/users returns 503 when conn.cursor() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_list_users_execute_raises(monkeypatch):
+    """GET /api/users returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_list_users_fetchall_raises(monkeypatch):
+    """GET /api/users returns 503 when cur.fetchall() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+# --- create_user deep error paths ---
+
+
+def test_create_user_cursor_raises(monkeypatch):
+    """POST /api/users returns 503 when conn.cursor() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_create_user_execute_raises(monkeypatch):
+    """POST /api/users returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_create_user_fetchone_raises(monkeypatch):
+    """POST /api/users returns 503 when cur.fetchone() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_create_user_commit_raises(monkeypatch):
+    """POST /api/users returns 503 when conn.commit() raises (rollback succeeds)."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_create_user_rollback_raises(monkeypatch):
+    """POST /api/users returns 503 when both commit and rollback raise."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"

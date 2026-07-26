@@ -57,7 +57,8 @@ def list_users():
         cur = conn.cursor()
         cur.execute("SELECT id, username, email, age, active FROM users ORDER BY id")
         rows = cur.fetchall()
-    except psycopg2.Error:
+    except psycopg2.Error as e:
+        app.logger.error("DB error in list_users: %s", e)
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
@@ -91,11 +92,19 @@ def create_user():
             "INSERT INTO users (username, email, age) VALUES (%s, %s, %s) RETURNING id",
             (username, email, age)
         )
-        user_id = cur.fetchone()[0]
-        conn.commit()
-    except psycopg2.Error:
-        if conn is not None:
+        row = cur.fetchone()
+        if row is None:
             conn.rollback()
+            return jsonify({"error": "database unavailable"}), 503
+        user_id = row[0]
+        conn.commit()
+    except psycopg2.Error as e:
+        app.logger.error("DB error in create_user: %s", e)
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
@@ -139,7 +148,8 @@ def get_user(user_id: str):
             (uid,)
         )
         row = cur.fetchone()
-    except psycopg2.Error:
+    except psycopg2.Error as e:
+        app.logger.error("DB error in get_user: %s", e)
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
@@ -193,7 +203,8 @@ def deactivate_user(user_id: str):
         )
         row = cur.fetchone()
         conn.commit()
-    except psycopg2.Error:
+    except psycopg2.Error as e:
+        app.logger.error("DB error in deactivate_user: %s", e)
         if conn is not None:
             conn.rollback()
         return jsonify({"error": "database unavailable"}), 503
