@@ -192,3 +192,63 @@ def test_deactivate_user_db_unavailable(monkeypatch):
         assert r.status_code == 503
         data = r.get_json()
         assert data["error"] == "database unavailable"
+
+
+# ---------------------------------------------------------------------------
+# DB error handling — list_users, create_user, get_user
+# ---------------------------------------------------------------------------
+
+
+def test_list_users_db_unavailable(monkeypatch):
+    """GET /api/users returns 503 when DB is unreachable."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users")
+        assert r.status_code == 503
+        data = r.get_json()
+        assert data["error"] == "database unavailable"
+
+
+def test_create_user_db_unavailable(monkeypatch):
+    """POST /api/users returns 503 when DB is unreachable."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30
+        })
+        assert r.status_code == 503
+        data = r.get_json()
+        assert data["error"] == "database unavailable"
+
+
+def test_get_user_db_unavailable(monkeypatch):
+    """GET /api/users/<id> returns 503 when DB is unreachable — no NameError."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.get("/api/users/1")
+        assert r.status_code == 503
+        data = r.get_json()
+        assert data["error"] == "database unavailable"

@@ -50,12 +50,20 @@ def health():
 
 @app.route("/api/users", methods=["GET"])
 def list_users():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, username, email, age, active FROM users ORDER BY id")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, username, email, age, active FROM users ORDER BY id")
+        rows = cur.fetchall()
+    except psycopg2.Error:
+        return jsonify({"error": "database unavailable"}), 503
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
     return jsonify([
         {"id": r[0], "username": r[1], "email": r[2], "age": r[3], "active": r[4]}
         for r in rows
@@ -74,16 +82,26 @@ def create_user():
     if "@" not in email:
         return jsonify({"error": "invalid email"}), 400
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (username, email, age) VALUES (%s, %s, %s) RETURNING id",
-        (username, email, age)
-    )
-    user_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (username, email, age) VALUES (%s, %s, %s) RETURNING id",
+            (username, email, age)
+        )
+        user_id = cur.fetchone()[0]
+        conn.commit()
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        return jsonify({"error": "database unavailable"}), 503
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
     return jsonify({"id": user_id, "username": username, "email": email, "age": age}), 201
 
 
@@ -111,6 +129,8 @@ def get_user(user_id: str):
     if uid <= 0:
         return jsonify({"error": "id must be a positive integer"}), 400
 
+    conn = None
+    cur = None
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -122,8 +142,10 @@ def get_user(user_id: str):
     except psycopg2.Error:
         return jsonify({"error": "database unavailable"}), 503
     finally:
-        cur.close()
-        conn.close()
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
 
     if row is None:
         return jsonify({"error": "user not found"}), 404
