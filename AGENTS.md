@@ -63,6 +63,25 @@ kanban_complete(
 )
 ```
 
+## Deterministic Layer (from SDLC-013)
+
+After all 3 reviewers pass, the deterministic layer runs as a mechanical referee before deploy. It is **scripts, not agents** — no human judgment needed.
+
+**Run it:** `bash scripts/deterministic-check.sh`
+
+**What it checks:**
+| Tool | What | Exit |
+|------|------|------|
+| ruff | Lint errors + pyflakes (not style nits) | Fail on E/F/W |
+| mypy | Static type checking | Fail on type errors |
+| bandit | SAST — SQL injection, hardcoded secrets, unsafe patterns | Fail on High/Medium |
+
+**Rules:**
+- All 3 must pass. Any failure → card goes back to Code.
+- Suppressions are explicit in the script (e.g., `-s B110,B104,B608` for deliberate patterns).
+- Bandit `# nosec` comments must be on the same line as the flagged statement.
+- The script is the authority. If bandit fails, the reviewer PASS doesn't matter.
+
 ## Score Conventions (see sdlc-orchestration skill)
 
 Your work is scored on these Langfuse metrics:

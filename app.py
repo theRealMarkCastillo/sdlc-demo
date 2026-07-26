@@ -82,7 +82,7 @@ def require_identity_match(f):
                 {"error": "API key identity mapping not configured"}
             ), 500
         try:
-            uid = int(user_id)
+            uid = int(user_id)  # type: ignore[arg-type]  # caught by ValueError below
         except (ValueError, TypeError):
             # Non-integer — let endpoint handle validation
             return f(*args, **kwargs)
@@ -377,8 +377,8 @@ def update_user(user_id: str):
             return jsonify({"error": "age must be an integer"}), 400
 
     # Build dynamic SET clause
-    set_clauses = []
-    values = []
+    set_clauses: list[str] = []
+    values: list[object] = []
     if username is not None:
         set_clauses.append("username = %s")
         values.append(username)
@@ -400,8 +400,8 @@ def update_user(user_id: str):
         if cur.fetchone() is None:
             return jsonify({"error": "user not found"}), 404
 
-        # Phase 2: UPDATE ... RETURNING
-        cur.execute(
+        # Phase 2: UPDATE ... RETURNING — column names from our code, values parameterized
+        cur.execute(  # nosec B608
             f"UPDATE users SET {', '.join(set_clauses)} WHERE id = %s "
             f"RETURNING id, username, email, age, active",
             values + [uid]

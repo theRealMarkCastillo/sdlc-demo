@@ -1,0 +1,25 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]  # errors, pyflakes, warnings only — no style nits on pre-existing code
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["F811"]  # fixture redefinitions are normal in pytest
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "__pycache__"]
+skips = ["B101", "B104", "B608"]
+# B101: assert used in tests is fine
+# B104: binding to 0.0.0.0 is standard for Docker containers
+# B608: set_clauses are built from whitelisted column names, not user input;
+#       actual values go through parameterized %s placeholders
