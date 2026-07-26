@@ -43,8 +43,8 @@ TEST_URL=http://localhost:5001 pytest tests/ -v
 
 ```
 sdlc-demo/
-├── app.py                    # Flask app (~140 lines, single file for demo)
-├── tests/test_api.py         # 7 tests, hits live staging
+├── app.py                    # Flask app (~215 lines, single file for demo)
+├── tests/test_api.py         # 39 tests
 ├── Dockerfile                # Python 3.12 + Flask + psycopg2
 ├── docker-compose.staging.yml # Project: sdlc-staging, port 5001
 ├── docker-compose.prod.yml    # Project: sdlc-prod, port 5002
@@ -71,11 +71,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline state.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `DATABASE_URL` | (required) | Postgres connection string for Alembic |
 | `DB_HOST` | localhost | Postgres host |
 | `DB_PORT` | 5432 | Postgres port |
 | `DB_NAME` | sdlc_demo | Database name |
-| `DB_USER` | sdlc_user | Database user |
-| `DB_PASS` | sdlc_pass | Database password |
+| `DB_USER` | (required) | Database user |
+| `DB_PASS` | (required) | Database password |
 
 These are set in the docker-compose files; no `.env` needed for local development.
 
