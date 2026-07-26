@@ -131,13 +131,17 @@ def list_users():
         JSON list of user objects matching the (optional) filter.
     """
     q = request.args.get("q", "")
+    # Strip whitespace and cap length to prevent resource exhaustion
+    q = q.strip()[:200]
     conn = None
     cur = None
     try:
         conn = get_db()
         cur = conn.cursor()
         if q:
-            pattern = f"%{q}%"
+            # Escape LIKE wildcards so user input isn't misinterpreted
+            safe_q = q.replace("%", r"\%").replace("_", r"\_")
+            pattern = f"%{safe_q}%"
             cur.execute(
                 "SELECT id, username, email, age, active FROM users "
                 "WHERE (username ILIKE %s OR email ILIKE %s) ORDER BY id",

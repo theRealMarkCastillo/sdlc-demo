@@ -1268,6 +1268,12 @@ def test_search_by_email():
 
 def test_search_no_results():
     """GET /api/users?q=<term> returns empty list when no users match."""
+    # Create a user first so the test doesn't pass vacuously on empty DB
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "noresults_test", "email": "noresults@example.com", "age": 25
+    }, headers=AUTH_HEADER)
+    assert r.status_code == 201
+
     r = requests.get(f"{BASE_URL}/api/users", params={"q": "zzz_nonexistent_term_999"})
     assert r.status_code == 200
     users = r.json()
@@ -1315,10 +1321,42 @@ def test_search_special_characters():
     assert len(users) == 1
     assert users[0]["username"] == "user_with_underscore"
 
-    # Search with percent sign — should not crash, return empty
+    # Search with percent sign — now escaped, should not crash, return empty
     r = requests.get(f"{BASE_URL}/api/users", params={"q": "%"})
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
+    assert r.json() == []  # literal % won't match any user
+
+
+def test_search_case_insensitive():
+    """GET /api/users?q=<term> is case-insensitive (ILIKE)."""
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "CaseTest", "email": "CaseTest@EXAMPLE.com", "age": 25
+    }, headers=AUTH_HEADER)
+    assert r.status_code == 201
+
+    # Search lowercase
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "casetest"})
+    assert r.status_code == 200
+    assert len(r.json()) >= 1
+    assert any(u["username"] == "CaseTest" for u in r.json())
+
+    # Search by email domain case-insensitive
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "example"})
+    assert r.status_code == 200
+    assert any(u["email"] == "CaseTest@EXAMPLE.com" for u in r.json())
+
+
+def test_search_whitespace_only():
+    """GET /api/users?q=<whitespace> returns all users (stripped to empty)."""
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "whitespace_test", "email": "ws@example.com", "age": 25
+    }, headers=AUTH_HEADER)
+    assert r.status_code == 201
+
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "   "})
+    assert r.status_code == 200
+    users = r.json()
+    assert len(users) >= 1  # stripped to empty = returns all
 
 
 def test_search_sql_injection_attempt():
