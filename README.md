@@ -22,6 +22,7 @@ TEST_URL=http://localhost:5001 pytest tests/ -v
 
 | Doc | What it covers |
 |-----|----------------|
+| **[docs/PLAN.md](docs/PLAN.md)** | Original design plan with 3 source citations and design decisions |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | 8-node cycle, identity scopes, storage map, with diagrams |
 | **[docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md)** | How monitor catches production issues and routes to fix |
 | **[docs/REVIEW-PROCESS.md](docs/REVIEW-PROCESS.md)** | Multi-reviewer AND-gate, tiebreaker, retry protocol |
