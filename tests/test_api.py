@@ -1289,6 +1289,126 @@ def test_create_user_age_zero_not_rejected_by_typecoercion():
         assert r.status_code in (201, 503)
 
 
+# ---------------------------------------------------------------------------
+# Email format validation hardening (SDLC-014)
+# ---------------------------------------------------------------------------
+
+
+def test_create_user_email_missing_at():
+    """POST /api/users returns 400 when email lacks '@'."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "no_at_sign",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_at_only():
+    """POST /api/users returns 400 when email is just '@'."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "@",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_no_local_part():
+    """POST /api/users returns 400 when email has no local part (e.g. @foo.com)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "@foo.com",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_no_domain_part():
+    """POST /api/users returns 400 when email has no domain part (e.g. user@)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "user@",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_no_dot_in_domain():
+    """POST /api/users returns 400 when email domain has no dot (e.g. user@foo)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "user@foo",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_whitespace():
+    """POST /api/users returns 400 when email is whitespace only."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "  ",
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_create_user_email_strips_whitespace():
+    """POST /api/users with whitespace-padded email passes (strips to valid email)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "  valid@host.com  ",
+            "age": 30
+        })
+        # Type check passes; the error (if any) is from the DB, not a 400
+        assert r.status_code in (201, 503)
+
+
+def test_create_user_email_too_long():
+    """POST /api/users returns 400 when email exceeds 254 characters."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        # 243 + '@' + "example.com" = 255 chars (over the 254 limit)
+        long_email = "a" * 243 + "@example.com"
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": long_email,
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "email must not exceed 254 characters"
+
+
+def test_update_user_email_format_hardening():
+    """PUT /api/users/<id> returns 400 when email has no local part."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"email": "@foo.com"})
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
 def test_search_by_username():
     """GET /api/users?q=<term> returns users whose username contains the term."""
     # Create users with distinct usernames

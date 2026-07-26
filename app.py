@@ -106,6 +106,35 @@ def get_db():
     )
 
 
+# --- Validation helpers ---
+
+def _validate_email(email: str) -> str | None:
+    """Validate email format. Returns error message or None if valid.
+
+    Checks:
+    - Whitespace stripped from both ends (and rejects whitespace-only)
+    - Exactly one '@' character
+    - Local part (before @) must be non-empty
+    - Domain part (after @) must be non-empty and contain at least one '.'
+    - Total length must not exceed 254 characters (RFC 5321)
+    """
+    email = email.strip()
+    if not email:
+        return "email must be a non-empty string"
+    if len(email) > 254:
+        return "email must not exceed 254 characters"
+    if email.count("@") != 1:
+        return "email must contain exactly one '@'"
+    local, domain = email.split("@")
+    if not local:
+        return "email must have a local part before '@'"
+    if not domain:
+        return "email must have a domain part after '@'"
+    if "." not in domain:
+        return "email domain must contain at least one dot"
+    return None
+
+
 # --- Endpoints ---
 
 @app.route("/health")
@@ -178,8 +207,9 @@ def create_user():
         return jsonify({"error": "username must be at least 3 chars"}), 400
     if not isinstance(email, str):
         return jsonify({"error": "email must be a string"}), 400
-    if "@" not in email:
-        return jsonify({"error": "invalid email"}), 400
+    email_err = _validate_email(email)
+    if email_err:
+        return jsonify({"error": email_err}), 400
     if isinstance(age, bool) or type(age) is not int:
         return jsonify({"error": "age must be an integer"}), 400
 
@@ -366,13 +396,14 @@ def update_user(user_id: str):
         if not isinstance(username, str) or len(username) < 3:
             return jsonify({"error": "username must be at least 3 chars"}), 400
 
-    # Validate email if present — must be a string and contain '@'
+    # Validate email if present — must be a string with valid format
     email = data.get("email")
     if email is not None:
         if not isinstance(email, str):
             return jsonify({"error": "email must be a string"}), 400
-        if "@" not in email:
-            return jsonify({"error": "invalid email"}), 400
+        email_err = _validate_email(email)
+        if email_err:
+            return jsonify({"error": email_err}), 400
 
     # Validate age if present — must be int and not bool (per AGENTS.md type-coercion)
     age = data.get("age")
