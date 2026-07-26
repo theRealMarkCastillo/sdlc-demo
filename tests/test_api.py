@@ -195,6 +195,18 @@ def test_deactivate_user_db_unavailable(monkeypatch):
         assert data["error"] == "database unavailable"
 
 
+def test_deactivate_user_rollback_raises(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when both commit and rollback raise."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
 # ---------------------------------------------------------------------------
 # DB error handling — list_users, create_user, get_user
 # ---------------------------------------------------------------------------

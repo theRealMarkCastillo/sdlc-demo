@@ -206,7 +206,10 @@ def deactivate_user(user_id: str):
     except psycopg2.Error as e:
         app.logger.error("DB error in deactivate_user: %s", e)
         if conn is not None:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass  # connection dead, nothing to roll back
         return jsonify({"error": "database unavailable"}), 503
     finally:
         if cur is not None:
