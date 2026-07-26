@@ -706,3 +706,279 @@ def test_app_imports_cleanly_with_credentials_set():
         "app import should have failed when DB_PASS is missing, "
         f"but got return code {result.returncode}"
     )
+
+# ---------------------------------------------------------------------------
+# PUT /api/users/<id> — update user
+# ---------------------------------------------------------------------------
+
+
+def test_update_user_success():
+    """PUT /api/users/<id> updates username, email, age and returns updated user."""
+    # Create a user first
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "update_test",
+        "email": "update@example.com",
+        "age": 30
+    })
+    assert r.status_code == 201
+    user_id = r.json()["id"]
+
+    # Update all three fields
+    r = requests.put(f"{BASE_URL}/api/users/{user_id}", json={
+        "username": "updated_name",
+        "email": "updated@example.com",
+        "age": 35
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == user_id
+    assert data["username"] == "updated_name"
+    assert data["email"] == "updated@example.com"
+    assert data["age"] == 35
+    assert data["active"] is True  # active unchanged
+
+    # Verify via GET
+    r = requests.get(f"{BASE_URL}/api/users/{user_id}")
+    assert r.status_code == 200
+    assert r.json()["username"] == "updated_name"
+    assert r.json()["email"] == "updated@example.com"
+    assert r.json()["age"] == 35
+
+
+def test_update_user_partial():
+    """PUT /api/users/<id> with only some fields — updates only those."""
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "partial_test",
+        "email": "partial@example.com",
+        "age": 22
+    })
+    assert r.status_code == 201
+    user_id = r.json()["id"]
+
+    # Update only username
+    r = requests.put(f"{BASE_URL}/api/users/{user_id}", json={
+        "username": "only_username_changed"
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert data["username"] == "only_username_changed"
+    assert data["email"] == "partial@example.com"  # unchanged
+    assert data["age"] == 22  # unchanged
+
+
+def test_update_user_not_found():
+    """PUT /api/users/<id> returns 404 when user does not exist."""
+    r = requests.put(f"{BASE_URL}/api/users/99999", json={
+        "username": "does_not_matter"
+    })
+    assert r.status_code == 404
+    data = r.json()
+    assert "error" in data
+    assert "not found" in data["error"].lower()
+
+
+# --- update_user validation ---
+
+
+def test_update_user_invalid_id():
+    """PUT /api/users/<id> returns 400 when id is not an integer."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/abc", json={"username": "validuser"})
+        assert r.status_code == 400
+        assert "integer" in r.get_json()["error"].lower()
+
+
+def test_update_user_zero_id():
+    """PUT /api/users/<id> returns 400 when id is zero."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/0", json={"username": "validuser"})
+        assert r.status_code == 400
+        assert "positive" in r.get_json()["error"].lower()
+
+
+def test_update_user_negative_id():
+    """PUT /api/users/<id> returns 400 when id is negative."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/-5", json={"username": "validuser"})
+        assert r.status_code == 400
+        assert "positive" in r.get_json()["error"].lower()
+
+
+def test_update_user_username_too_short():
+    """PUT /api/users/<id> returns 400 when username < 3 chars."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "ab"})
+        assert r.status_code == 400
+        assert "3 chars" in r.get_json()["error"].lower()
+
+
+def test_update_user_email_missing_at():
+    """PUT /api/users/<id> returns 400 when email lacks '@'."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"email": "no_at_sign"})
+        assert r.status_code == 400
+        assert "email" in r.get_json()["error"].lower()
+
+
+def test_update_user_email_not_string():
+    """PUT /api/users/<id> returns 400 when email is not a string (per AGENTS.md)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"email": 12345})
+        assert r.status_code == 400
+        assert "string" in r.get_json()["error"].lower()
+
+
+def test_update_user_age_bool():
+    """PUT /api/users/<id> returns 400 when age is a bool (type-coercion, per AGENTS.md)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"age": True})
+        assert r.status_code == 400
+        assert "integer" in r.get_json()["error"].lower()
+
+
+def test_update_user_age_float():
+    """PUT /api/users/<id> returns 400 when age is a float (not int, per AGENTS.md)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"age": 30.5})
+        assert r.status_code == 400
+        assert "integer" in r.get_json()["error"].lower()
+
+
+def test_update_user_no_fields():
+    """PUT /api/users/<id> returns 400 when body has none of username/email/age."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"irrelevant": "data"})
+        assert r.status_code == 400
+        err = r.get_json()["error"].lower()
+        assert any(k in err for k in ("username", "email", "age"))
+
+
+def test_update_user_empty_body():
+    """PUT /api/users/<id> returns 400 when body is empty."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={})
+        assert r.status_code == 400
+
+
+# --- update_user DB error paths ---
+
+
+def test_update_user_db_unavailable(monkeypatch):
+    """PUT /api/users/<id> returns 503 when DB is unreachable."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_cursor_raises(monkeypatch):
+    """PUT /api/users/<id> returns 503 when conn.cursor() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_execute_raises(monkeypatch):
+    """PUT /api/users/<id> returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_fetchone_raises(monkeypatch):
+    """PUT /api/users/<id> returns 503 when cur.fetchone() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_commit_raises(monkeypatch):
+    """PUT /api/users/<id> returns 503 when conn.commit() raises (rollback succeeds)."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_rollback_raises(monkeypatch):
+    """PUT /api/users/<id> returns 503 when both commit and rollback raise."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_update_user_fetchone_returns_none(monkeypatch):
+    """PUT /api/users/<id> returns 503 when UPDATE...RETURNING yields no row."""
+    import app as app_module
+
+    class FakeCursorNone:
+        def __init__(self):
+            self._call = 0
+        def execute(self, *args, **kwargs):
+            pass
+        def fetchone(self):
+            self._call += 1
+            if self._call == 1:
+                return (1,)  # SELECT finds the user
+            return None  # UPDATE...RETURNING yields nothing (DB anomaly)
+        def close(self):
+            pass
+
+    class FakeConnNone:
+        def cursor(self):
+            return FakeCursorNone()
+        def commit(self):
+            pass
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(app_module, "get_db", lambda: FakeConnNone())
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
