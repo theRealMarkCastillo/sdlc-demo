@@ -75,10 +75,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline state.
 | `DB_HOST` | localhost | Postgres host |
 | `DB_PORT` | 5432 | Postgres port |
 | `DB_NAME` | sdlc_demo | Database name |
-| `DB_USER` | (required) | Database user |
-| `DB_PASS` | (required) | Database password |
+| `DB_USER` | required — set in .env | Database user |
+| `DB_PASS` | required — set in .env | Database password |
 
-These are set in the docker-compose files; no `.env` needed for local development.
+These are set in the docker-compose files; a `.env` file is required for local development — copy `.env.example` to `.env` and fill in values.
 
 ## Project Path
 

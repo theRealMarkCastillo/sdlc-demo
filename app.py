@@ -9,8 +9,20 @@ app = Flask(__name__)
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
-DB_USER = os.environ["DB_USER"]
-DB_PASS = os.environ["DB_PASS"]
+try:
+    DB_USER = os.environ["DB_USER"]
+    DB_PASS = os.environ["DB_PASS"]
+except KeyError as e:
+    raise RuntimeError(
+        f"Missing required environment variable: {e.args[0]}. "
+        f"Copy .env.example to .env and fill in real values."
+    ) from e
+
+if not DB_USER or not DB_PASS:
+    raise RuntimeError(
+        "DB_USER and DB_PASS must be non-empty. "
+        "Check your .env file — values may be blank."
+    )
 
 
 def get_db():
