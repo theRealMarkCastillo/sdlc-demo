@@ -157,6 +157,8 @@ def deactivate_user(user_id: str):
     if uid <= 0:
         return jsonify({"error": "id must be a positive integer"}), 400
 
+    conn = None
+    cur = None
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -170,10 +172,14 @@ def deactivate_user(user_id: str):
         row = cur.fetchone()
         conn.commit()
     except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
         return jsonify({"error": "database unavailable"}), 503
     finally:
-        cur.close()
-        conn.close()
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
 
     if row is None:
         return jsonify({"error": "user not found"}), 404

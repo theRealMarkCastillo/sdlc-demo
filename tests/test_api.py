@@ -175,3 +175,20 @@ def test_deactivate_user_already_inactive():
     data = r.json()
     assert data["id"] == user_id
     assert data["active"] is False
+
+
+def test_deactivate_user_db_unavailable(monkeypatch):
+    """POST /api/users/<id>/deactivate returns 503 when DB is unreachable."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 503
+        data = r.get_json()
+        assert data["error"] == "database unavailable"
