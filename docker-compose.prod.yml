@@ -20,6 +20,12 @@ services:
     build: .
     ports:
       - "5002:5000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "sdlc-prod" 
     environment:
       DB_HOST: db
       DB_PORT: 5432
