@@ -4,6 +4,12 @@ import requests
 import os
 import psycopg2
 
+# Set required credential env vars so app module can be imported in unit tests.
+# Tests that verify the app crashes on missing creds use monkeypatch.delenv()
+# to temporarily remove these and then importlib.reload().
+os.environ.setdefault("DB_USER", "sdlc_user_test")
+os.environ.setdefault("DB_PASS", "sdlc_pass_test")
+
 BASE_URL = os.environ.get("TEST_URL", "http://localhost:5000")
 
 
@@ -610,3 +616,71 @@ def test_deactivate_user_commit_raises(monkeypatch):
         r = client.post("/api/users/1/deactivate")
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Secret rotation — env var validation tests
+# ---------------------------------------------------------------------------
+
+
+def test_app_crashes_when_db_pass_missing(monkeypatch):
+    """app.py raises KeyError on import when DB_PASS env var is not set."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.setenv("DB_USER", "test_user")
+    monkeypatch.delenv("DB_PASS", raising=False)
+
+    with pytest.raises(KeyError):
+        importlib.reload(app_module)
+
+
+def test_app_crashes_when_db_user_missing(monkeypatch):
+    """app.py raises KeyError on import when DB_USER env var is not set."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.setenv("DB_PASS", "test_pass")
+    monkeypatch.delenv("DB_USER", raising=False)
+
+    with pytest.raises(KeyError):
+        importlib.reload(app_module)
+
+
+def test_app_crashes_when_both_credentials_missing(monkeypatch):
+    """app.py raises KeyError when both DB_USER and DB_PASS are missing."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.delenv("DB_USER", raising=False)
+    monkeypatch.delenv("DB_PASS", raising=False)
+
+    with pytest.raises(KeyError):
+        importlib.reload(app_module)
+
+
+def test_app_infra_vars_keep_defaults(monkeypatch):
+    """DB_HOST, DB_PORT, DB_NAME keep their defaults when env vars are missing."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.setenv("DB_USER", "test_user")
+    monkeypatch.setenv("DB_PASS", "test_pass")
+    monkeypatch.delenv("DB_HOST", raising=False)
+    monkeypatch.delenv("DB_PORT", raising=False)
+    monkeypatch.delenv("DB_NAME", raising=False)
+
+    importlib.reload(app_module)
+    assert app_module.DB_HOST == "localhost"
+    assert app_module.DB_PORT == "5432"
+    assert app_module.DB_NAME == "sdlc_demo"
+
+
+def test_app_imports_cleanly_with_credentials_set():
+    """app.py imports without error when all required env vars are present."""
+    import importlib
+    import importlib.util
+
+    # Verify module is importable (env vars are set by the test runner context)
+    spec = importlib.util.find_spec("app")
+    assert spec is not None

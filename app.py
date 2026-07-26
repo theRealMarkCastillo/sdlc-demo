@@ -9,8 +9,8 @@ app = Flask(__name__)
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
-DB_USER = os.environ.get("DB_USER", "sdlc_user")
-DB_PASS = os.environ.get("DB_PASS", "sdlc_pass")
+DB_USER = os.environ["DB_USER"]
+DB_PASS = os.environ["DB_PASS"]
 
 
 def get_db():
