@@ -2,10 +2,11 @@ version: "3.9"
 services:
   db:
     image: postgres:16-alpine
+    env_file: .env
     environment:
       POSTGRES_DB: sdlc_demo
       POSTGRES_USER: sdlc_user
-      POSTGRES_PASSWORD: sdlc_pass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5434:5432"
     volumes:
@@ -25,13 +26,14 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql://sdlc_user:sdlc_pass@db:5432/sdlc_demo
+      DATABASE_URL: postgresql://sdlc_user:${DB_PASS}@db:5432/sdlc_demo
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: sdlc_demo
       DB_USER: sdlc_user
-      DB_PASS: sdlc_pass
+      DB_PASS: ${DB_PASS}
     depends_on:
       db:
         condition: service_healthy
