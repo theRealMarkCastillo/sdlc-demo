@@ -52,8 +52,7 @@ kanban_complete(
         "trace_id": "session_20260726_abc123",
         "tests_run": 14,
         "tests_passed": 14,
-        "files_changed": ["/Users/markcastillo/git/sdlc-demo/app.py",
-                          "/Users/markcastillo/git/sdlc-demo/tests/test_api.py"],
+        "files_changed": ["app.py", "tests/test_api.py"],
         "decisions": ["token bucket with user_id key, IP fallback for anon"]
     }
 )
