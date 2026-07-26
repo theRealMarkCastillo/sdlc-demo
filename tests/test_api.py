@@ -264,6 +264,8 @@ def test_delete_user_not_found(monkeypatch):
     class FakeConn:
         def cursor(self):
             return FakeCursor()
+        def commit(self):
+            pass
         def rollback(self):
             pass
         def close(self):
@@ -318,14 +320,9 @@ def test_delete_user_already_inactive():
     import app as app_module
 
     class FakeCursor:
-        def __init__(self):
-            self._call = 0
         def execute(self, *args, **kwargs):
             pass
         def fetchone(self):
-            self._call += 1
-            if self._call == 1:
-                return (42,)  # SELECT finds the user
             return (42, "idempotent_test", "idempotent@example.com", 35, False)
         def close(self):
             pass
@@ -408,6 +405,44 @@ def test_delete_user_db_unavailable(monkeypatch):
         assert r.status_code == 503
         data = r.get_json()
         assert data["error"] == "database unavailable"
+
+
+def test_delete_user_execute_raises(monkeypatch):
+    """DELETE /api/users/<id> returns 503 when cur.execute() raises."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/1", headers=AUTH_HEADER)
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_delete_user_commit_raises(monkeypatch):
+    """DELETE /api/users/<id> returns 503 when conn.commit() raises (rollback succeeds)."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+    monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/1", headers=AUTH_HEADER)
+        assert r.status_code == 503
+        assert r.get_json()["error"] == "database unavailable"
+
+
+def test_delete_user_float_id(monkeypatch):
+    """DELETE /api/users/3.14 returns 400 because float IDs are not integers."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/3.14", headers=AUTH_HEADER)
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "id must be an integer"
 
 
 # ---------------------------------------------------------------------------
@@ -712,6 +747,8 @@ def test_create_user_fetchone_returns_none(monkeypatch):
     class FakeConn:
         def cursor(self):
             return FakeCursor()
+        def commit(self):
+            pass
         def rollback(self):
             pass
         def close(self):

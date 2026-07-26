@@ -388,14 +388,9 @@ def delete_user(user_id: str):
     try:
         conn = get_db()
         cur = conn.cursor()
-
-        # Phase 1: check existence — 404 if user doesn't exist
-        # (ensures idempotent re-deletes return 200, not 404)
-        cur.execute("SELECT id FROM users WHERE id = %s", (uid,))
-        if cur.fetchone() is None:
-            return jsonify({"error": "user not found"}), 404
-
-        # Phase 2: UPDATE...RETURNING — soft-delete by setting active=false
+        # UPDATE...RETURNING in one round trip. If no row matches, RETURNING
+        # yields nothing → cur.fetchone() is None. If active is already false,
+        # UPDATE still returns the row (idempotent delete = 200).
         cur.execute(
             "UPDATE users SET active = %s WHERE id = %s "
             "RETURNING id, username, email, age, active",
@@ -420,9 +415,8 @@ def delete_user(user_id: str):
         if conn is not None:
             conn.close()
 
-    # Phase 3: UPDATE...RETURNING yielded no row — DB anomaly
     if row is None:
-        return jsonify({"error": "database unavailable"}), 503
+        return jsonify({"error": "user not found"}), 404
 
     return jsonify({
         "id": row[0],
