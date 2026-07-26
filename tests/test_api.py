@@ -1221,3 +1221,116 @@ def test_app_crashes_when_api_key_empty(monkeypatch):
 
     for k, v in _saved.items():
         setattr(app_module, k, v)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/users?q=<search_term> — search query param
+# ---------------------------------------------------------------------------
+
+
+def test_search_by_username():
+    """GET /api/users?q=<term> returns users whose username contains the term."""
+    # Create users with distinct usernames
+    for uname in ("alice_search", "bob_search", "charlie_other"):
+        r = requests.post(f"{BASE_URL}/api/users", json={
+            "username": uname,
+            "email": f"{uname}@example.com",
+            "age": 25
+        }, headers=AUTH_HEADER)
+        assert r.status_code == 201
+
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "search"})
+    assert r.status_code == 200
+    users = r.json()
+    usernames = [u["username"] for u in users]
+    assert "alice_search" in usernames
+    assert "bob_search" in usernames
+    assert "charlie_other" not in usernames
+
+
+def test_search_by_email():
+    """GET /api/users?q=<term> returns users whose email contains the term."""
+    # Create users with distinct emails
+    for i, domain in enumerate(("alpha.com", "beta.org", "gamma.net"), 1):
+        r = requests.post(f"{BASE_URL}/api/users", json={
+            "username": f"email_test_{i}",
+            "email": f"user{i}@{domain}",
+            "age": 25
+        }, headers=AUTH_HEADER)
+        assert r.status_code == 201
+
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "beta"})
+    assert r.status_code == 200
+    users = r.json()
+    assert len(users) == 1
+    assert users[0]["email"] == "user2@beta.org"
+
+
+def test_search_no_results():
+    """GET /api/users?q=<term> returns empty list when no users match."""
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "zzz_nonexistent_term_999"})
+    assert r.status_code == 200
+    users = r.json()
+    assert users == []
+
+
+def test_search_empty_q_returns_all():
+    """GET /api/users with empty q returns all users (backward compatible)."""
+    # Create a couple users first so we know there are some
+    for uname in ("emptyq_a", "emptyq_b"):
+        r = requests.post(f"{BASE_URL}/api/users", json={
+            "username": uname,
+            "email": f"{uname}@example.com",
+            "age": 25
+        }, headers=AUTH_HEADER)
+        assert r.status_code == 201
+
+    # With empty q
+    r_empty = requests.get(f"{BASE_URL}/api/users", params={"q": ""})
+    assert r_empty.status_code == 200
+
+    # Without q param at all
+    r_none = requests.get(f"{BASE_URL}/api/users")
+    assert r_none.status_code == 200
+
+    # Both should return the same (all users)
+    assert len(r_empty.json()) == len(r_none.json())
+    assert len(r_empty.json()) >= 2
+
+
+def test_search_special_characters():
+    """GET /api/users?q=<term> handles special characters safely."""
+    # Create a user with special chars in username for realistic testing
+    r = requests.post(f"{BASE_URL}/api/users", json={
+        "username": "user_with_underscore",
+        "email": "underscore@example.com",
+        "age": 25
+    }, headers=AUTH_HEADER)
+    assert r.status_code == 201
+
+    # Search with underscore — should find the user
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "underscore"})
+    assert r.status_code == 200
+    users = r.json()
+    assert len(users) == 1
+    assert users[0]["username"] == "user_with_underscore"
+
+    # Search with percent sign — should not crash, return empty
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": "%"})
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_search_sql_injection_attempt():
+    """GET /api/users?q=<term> is safe against SQL injection."""
+    # Attempt SQL injection — should return empty, not crash or leak data
+    payloads = [
+        "'; DROP TABLE users; --",
+        "' OR '1'='1",
+        "'; SELECT * FROM users; --",
+    ]
+    for payload in payloads:
+        r = requests.get(f"{BASE_URL}/api/users", params={"q": payload})
+        assert r.status_code == 200
+        # Should return empty list — no user matches these injection strings
+        assert r.json() == [], f"SQL injection payload returned data: {payload}"

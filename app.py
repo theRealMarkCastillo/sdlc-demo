@@ -120,12 +120,33 @@ def health():
 
 @app.route("/api/users", methods=["GET"])
 def list_users():
+    """Return users, optionally filtered by a search term.
+
+    Query params:
+        q (str, optional): Case-insensitive search term matched against
+            username and email via ILIKE with surrounding wildcards.
+            When missing or empty, returns all users.
+
+    Returns:
+        JSON list of user objects matching the (optional) filter.
+    """
+    q = request.args.get("q", "")
     conn = None
     cur = None
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT id, username, email, age, active FROM users ORDER BY id")
+        if q:
+            pattern = f"%{q}%"
+            cur.execute(
+                "SELECT id, username, email, age, active FROM users "
+                "WHERE (username ILIKE %s OR email ILIKE %s) ORDER BY id",
+                (pattern, pattern)
+            )
+        else:
+            cur.execute(
+                "SELECT id, username, email, age, active FROM users ORDER BY id"
+            )
         rows = cur.fetchall()
     except psycopg2.Error as e:
         app.logger.error("DB error in list_users: %s [%s]", type(e).__name__, getattr(e, 'pgcode', 'N/A'))
