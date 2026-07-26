@@ -1,6 +1,6 @@
 # SDLC System Design Plan
 
-> Canonical design document. Originally written 2026-07-26, updated as the system evolved.
+> Canonical design document. Originally written 2026-07-26, updated 2026-07-26 (post-implementation audit + blog cross-reference).
 > Live at `~/git/sdlc-demo/docs/PLAN.md`. The copy at `~/.hermes/plans/` is a snapshot.
 
 ---
@@ -489,17 +489,23 @@ All six phases were completed July 2026 across 8 SDLC cards (SDLC-001 through SD
 
 ## Risks and Open Questions
 
-1. **Subagent reliability** — Three review subagents per card means 3x the chance of a subagent hallucinating a finding or missing a real one. Shadow mode mitigates but doesn't eliminate. Start with high overlap (all three reviewers) and reduce as confidence grows.
+1. **Subagent reliability** ✅ Resolved. 8 cards through the system, tiebreaker routing proven (SDLC-002). Shadow mode remains untested for new reviewer types.
 
-2. **Context budget** — Each review subagent needs enough context to be useful. A 500-line PR may need 2000+ lines of surrounding code for context. The orchestrator must curate context carefully.
+2. **Context budget** — Each review subagent needs enough context to be useful. A 500-line PR may need 2000+ lines of surrounding code. The orchestrator must curate context carefully. Not yet hit as a bottleneck.
 
-3. **Deploy safety** — The deploy stage is where real damage happens. Start with staging-only deploys. Add production deploys only after the human gate is proven.
+3. **Deploy safety** ✅ Resolved. Staging-only deploys proven. Production deploys with human approval gate proven (SDLC-006). Structured approval format prevents stale/drifted approvals.
 
-4. **Monitor vs. Fixer separation** — This is the most important boundary. The monitor profile must be genuinely unable to deploy. Test this by having it try.
+4. **Monitor vs. Fixer separation** ✅ Resolved. 3-permission boundary proven — monitor profile cannot deploy. Enforced at toolset level, not instruction level.
 
-5. **Profile proliferation** — How many separate Hermes profiles is too many? The three reviewers don't need profiles (they're subagents). The developer and deployer could be subagents too. Only the orchestrator and monitor genuinely need persistent profiles. Start lean.
+5. **Profile proliferation** ✅ Resolved. Went lean: only 2 persistent profiles (default + sdlc-monitor). Reviewers, engineers, and deployers are subagents with per-dispatch toolset restrictions.
 
-6. **Integration with existing CoS** — The two systems should share workers where possible (software-engineer is the same worker type). But the SDLC review process is fundamentally different from CoS QC. Different board, different skill, different gates.
+6. **Integration with existing CoS** ✅ Resolved. Boards are separate kanban boards (`cos-board` vs `sdlc`). Workers shared where it makes sense (software-engineer, operations-research). Wiki is companions-only; SDLC state lives in kanban + project git.
+
+7. **Branch-merge discipline** 🔴 New. Worker left repo on feature branch after SDLC-008. Done should mean "branch merged to main." Add to Deploy DoD or have worker merge after review passes. Closed-loop candidate.
+
+8. **Agent-to-agent communication** 🟡 New (from CISO blog). Profiles can communicate via gateway with no explicit guard. CISO blog describes incident where an agent reached out to another on its own initiative — caught at human review gate. At our scale this is fine; at Anthropic's scale it's a CISO concern.
+
+9. **Knowledge index for security reviews** 🟡 New (from SDLC blog §Plan). Anthropic connects their PSR to an internal knowledge index for cross-card context. Our security reviewer gets only the card + AGENTS.md + skill — no memory of past incidents. Largest architectural gap vs. Anthropic's system.
 
 ---
 
@@ -507,10 +513,65 @@ All six phases were completed July 2026 across 8 SDLC cards (SDLC-001 through SD
 
 All six implementation phases complete. 8 cards through the system. The SDLC orchestration, multi-reviewer AND-gate, closed-loop editing, deploy pipeline, monitor profile, and Langfuse governance are all operational.
 
-**Open work:**
-- README endpoint table is missing `POST /api/users/<id>/deactivate`
-- Shadow mode for new reviewer types (implemented in code, hasn't been exercised yet)
-- Metrics sampling (10% P2, 100% P0 — governance hook exists, needs a cron trigger)
-- `PATCH /api/users/<id>` endpoint (RESTful update)
-- `DELETE /api/users/<id>` endpoint (RESTful delete)
-- Email format validation hardening (current: only checks for `@`)
+### Verified Alignment with Anthropic's Architecture
+
+Cross-referenced against all three source blogs on 2026-07-26. Our design maps correctly to Anthropic's SDLC at every stage:
+
+| Anthropic pattern | Our implementation | Source |
+|---|---|---|
+| Multiple narrow agents > one mega-agent | 3 parallel reviewers AND-gated | SDLC blog §Test(CI) |
+| Hard identity boundaries, not instruction-based | toolset restrictions on delegate_task, sdlc-monitor 3-permission boundary | SDLC blog §Monitor + Identity blog |
+| Closed loop: bug class → rulebook → future code avoids it | AGENTS.md updates + skill patching (SDLC-001, SDLC-008) | SDLC blog §Code + Migration blog |
+| Deterministic layer as mechanical referee | lint + tests + typecheck as gate after agent reviews | Migration blog: "let scripts be the referee" |
+| Tiebreaker routing on reviewer disagreement | tiebreaker subagent with fresh context | Migration blog: "disagreement → third agent" |
+| "Fix the process, not the code" | Orchestrator edits AGENTS.md/skills, not per-file patches | Migration blog core insight |
+| Single-purpose identity with minimum permissions | Per-dispatch toolset scoping (terminal+file for engineers, file for reviewers) | SDLC blog §Monitor + Identity blog |
+| Humans shift based on risk, not removed | P0/P1 deploy gate via Telegram structured approval | SDLC blog §Governance |
+| Identity per-scope (workspace/private channel/personal DM) | Default profile, scoped subagents, local terminal | Identity blog |
+| Revoke identity = delete profile | Profile deletion removes all access for that scope | Identity blog |
+
+### Open Work by Priority
+
+**Process gaps (should fix):**
+
+| Gap | Detail | Source |
+|-----|--------|--------|
+| Branch-merge discipline | Worker left repo on feature branch after SDLC-008. Done should mean "branch merged to main." Add merge verification to Deploy stage DoD or have worker merge after review passes. | Migration blog: "make the queue mechanical and resumable" |
+| Worker merge-back | software-engineer worker should merge to main as the final step, not leave the branch dangling for the orchestrator to discover. This is a closed-loop candidate — same bug class as "agent didn't clean up its workspace." |
+
+**Implementation gaps (on the list):**
+
+| Gap | Detail |
+|-----|--------|
+| Shadow mode | Implemented in code but never exercised — all reviewers went straight to gating |
+| Metrics sampling | 10% P2, 100% P0 — governance hook exists, needs cron trigger |
+| SAST in deterministic layer | We run lint/tests/typecheck. Anthropic also runs SAST tools posting directly on PRs. |
+| Continuous DAST in staging | Mentioned in PLAN's deploy stage, never wired up. Anthropic runs "continuous AI-powered DAST scans." |
+| README endpoint table | Missing `POST /api/users/<id>/deactivate` |
+
+**Feature gaps (demo app):**
+
+| Gap | Detail |
+|-----|--------|
+| `PATCH /api/users/<id>` | RESTful update endpoint |
+| `DELETE /api/users/<id>` | RESTful delete endpoint |
+| Email validation hardening | Current: only checks for `@`. Should validate format properly. |
+
+**Structural gaps (future scale):**
+
+| Gap | Detail | Source |
+|-----|--------|--------|
+| Knowledge index / RAG for security reviews | Anthropic connects their PSR to "an internal knowledge index across organization-wide policies, past decisions, and related systems." Our security reviewer gets only the card + AGENTS.md + skill — no cross-card incident memory. This is the biggest architectural difference. | SDLC blog §Plan: "Connect security agents to organizational context" |
+| Zero Trust for Agents framework | The SDLC blog explicitly says it should be combined with their Zero Trust framework. We have identity scoping but not the full overlay (just-in-time credential grants, identity-aware clearance). | SDLC blog introduction |
+| Agent-to-agent communication unguarded | CISO blog describes incident where "the incident response agent reached out over Slack to another Claude instance on its own initiative." Our profiles can talk via gateway with no explicit guard. | SDLC blog §Monitor |
+| Model tiering | Migration blog: "Don't use the largest model for everything." We don't tier — all subagents use the same model. Anthropic uses smaller models for implementation fan-out, large models for reviewers/rule-writers. | Migration blog best practices |
+
+### Resolved Risks (from original PLAN)
+
+| Risk | Resolution |
+|------|-----------|
+| Subagent reliability | Proven via 8 cards, tiebreaker routing worked (SDLC-002) |
+| Deploy safety | Staging + human gate proven (SDLC-006 deploy approval) |
+| Monitor vs fixer separation | 3-permission boundary proven; monitor profile literally cannot deploy |
+| Profile proliferation | Went lean: only default + sdlc-monitor profiles. Reviewers/engineers are subagents. |
+| CoS integration | Boards are separate kanban boards, workers shared where it makes sense. Wiki is companions-only. |
