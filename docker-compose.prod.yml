@@ -26,6 +26,7 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
+      DATABASE_URL: postgresql://sdlc_user:sdlc_pass@db:5432/sdlc_demo
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: sdlc_demo

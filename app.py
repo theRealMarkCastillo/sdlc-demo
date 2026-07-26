@@ -20,24 +20,6 @@ def get_db():
     )
 
 
-def init_db():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) NOT NULL,
-            email VARCHAR(255) NOT NULL,
-            age INTEGER NOT NULL,
-            active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
 @app.route("/health")
 def health():
     try:
@@ -230,5 +212,4 @@ def deactivate_user(user_id: str):
 
 
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=False)
