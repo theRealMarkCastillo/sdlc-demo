@@ -18,6 +18,38 @@ pip install -r requirements.txt -r tests/requirements.txt
 TEST_URL=http://localhost:5001 pytest tests/ -v
 ```
 
+## Database Migrations
+
+This project uses [Alembic](https://alembic.sqlalchemy.org/) for database migrations. Migrations run automatically in Docker via `entrypoint.sh` before the app starts.
+
+### Local Development
+
+Set `DATABASE_URL` to your local Postgres instance, then run migrations:
+
+```bash
+export DATABASE_URL=postgresql://sdlc_user:${DB_PASS}@localhost:5433/sdlc_demo
+alembic upgrade head
+```
+
+### Creating New Migrations
+
+```bash
+alembic revision --autogenerate -m "description of change"
+```
+
+Review the generated migration script in `alembic/versions/`, then apply it:
+
+```bash
+alembic upgrade head
+```
+
+### Rolling Back
+
+```bash
+alembic downgrade -1   # revert last migration
+alembic downgrade base  # revert all migrations
+```
+
 ## Documentation
 
 | Doc | What it covers |
@@ -43,9 +75,15 @@ TEST_URL=http://localhost:5001 pytest tests/ -v
 
 ```
 sdlc-demo/
-├── app.py                    # Flask app (~215 lines, single file for demo)
-├── tests/test_api.py         # 39 tests
-├── Dockerfile                # Python 3.12 + Flask + psycopg2
+├── app.py                    # Flask app (~300 lines, single file for demo)
+├── tests/test_api.py         # 71 tests
+├── Dockerfile                # Python 3.12 + Flask + psycopg2 + Alembic
+├── entrypoint.sh             # Run migrations then start app
+├── alembic.ini               # Alembic configuration
+├── alembic/                  # Migration scripts
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions/
 ├── docker-compose.staging.yml # Project: sdlc-staging, port 5001
 ├── docker-compose.prod.yml    # Project: sdlc-prod, port 5002
 ├── AGENTS.md                 # Worker conventions, closed-loop rules

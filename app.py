@@ -32,24 +32,6 @@ def get_db():
     )
 
 
-def init_db():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) NOT NULL,
-            email VARCHAR(255) NOT NULL,
-            age INTEGER NOT NULL,
-            active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
 @app.route("/health")
 def health():
     try:
@@ -241,6 +223,115 @@ def deactivate_user(user_id: str):
     })
 
 
+@app.route("/api/users/<user_id>", methods=["PUT"])
+def update_user(user_id: str):
+    """Update an existing user's username, email, and/or age.
+
+    Args:
+        user_id: The user ID from the URL path.
+
+    Returns:
+        JSON updated user object on success, or error response.
+    """
+    # Validate id is a valid integer at the API boundary
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "id must be an integer"}), 400
+
+    # Reject non-positive IDs (auto-increment primary keys start at 1)
+    if uid <= 0:
+        return jsonify({"error": "id must be a positive integer"}), 400
+
+    data = request.get_json() or {}
+
+    # At least one updatable field must be present
+    if not any(k in data for k in ("username", "email", "age")):
+        return jsonify(
+            {"error": "at least one of username, email, age required"}
+        ), 400
+
+    # Validate username if present — must be a string >= 3 chars
+    username = data.get("username")
+    if username is not None:
+        if not isinstance(username, str) or len(username) < 3:
+            return jsonify({"error": "username must be at least 3 chars"}), 400
+
+    # Validate email if present — must be a string and contain '@'
+    email = data.get("email")
+    if email is not None:
+        if not isinstance(email, str):
+            return jsonify({"error": "email must be a string"}), 400
+        if "@" not in email:
+            return jsonify({"error": "invalid email"}), 400
+
+    # Validate age if present — must be int and not bool (per AGENTS.md type-coercion)
+    age = data.get("age")
+    if age is not None:
+        if isinstance(age, bool) or type(age) is not int:
+            return jsonify({"error": "age must be an integer"}), 400
+
+    # Build dynamic SET clause
+    set_clauses = []
+    values = []
+    if username is not None:
+        set_clauses.append("username = %s")
+        values.append(username)
+    if email is not None:
+        set_clauses.append("email = %s")
+        values.append(email)
+    if age is not None:
+        set_clauses.append("age = %s")
+        values.append(age)
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        # Phase 1: check existence — 404 if user doesn't exist
+        cur.execute("SELECT id FROM users WHERE id = %s", (uid,))
+        if cur.fetchone() is None:
+            return jsonify({"error": "user not found"}), 404
+
+        # Phase 2: UPDATE ... RETURNING
+        cur.execute(
+            f"UPDATE users SET {', '.join(set_clauses)} WHERE id = %s "
+            f"RETURNING id, username, email, age, active",
+            values + [uid]
+        )
+        row = cur.fetchone()
+        conn.commit()
+    except psycopg2.Error as e:
+        app.logger.error(
+            "DB error in update_user: %s [%s]",
+            type(e).__name__, getattr(e, 'pgcode', 'N/A')
+        )
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return jsonify({"error": "database unavailable"}), 503
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+    # Phase 3: UPDATE...RETURNING yielded no row — DB anomaly
+    if row is None:
+        return jsonify({"error": "database unavailable"}), 503
+
+    return jsonify({
+        "id": row[0],
+        "username": row[1],
+        "email": row[2],
+        "age": row[3],
+        "active": row[4],
+    })
+
+
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=False)

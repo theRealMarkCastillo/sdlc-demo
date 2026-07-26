@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 .env
+.pytest_cache/
 .hermes/
+kanban.db

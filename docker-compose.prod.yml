@@ -28,6 +28,7 @@ services:
         max-file: "3"
     env_file: .env
     environment:
+      DATABASE_URL: postgresql://sdlc_user:${DB_PASS}@db:5432/sdlc_demo
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: sdlc_demo
