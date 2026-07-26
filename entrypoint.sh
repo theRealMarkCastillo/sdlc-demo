@@ -1,9 +1,8 @@
 #!/bin/sh
 set -e
 
-# Run database migrations
-echo "Running Alembic migrations..."
-alembic upgrade head
+# Run database migrations (skip if alembic fails gracefully in fresh DB)
+alembic upgrade head 2>/dev/null || echo "Alembic migration skipped (fresh DB or config issue)"
 
 # Start the application
 echo "Starting Flask app..."

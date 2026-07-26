@@ -52,12 +52,9 @@ fi
 echo ""
 
 # --- 3. bandit SAST scan ---
-# Suppressions:
-#   B110 — try/except/pass in rollback handlers (connection may be dead)
-#   B104 — binding to 0.0.0.0 (correct for Docker)
-#   B608 — f-string in SQL (column names from own code, values parameterized)
+# Config (skips, excludes) lives in pyproject.toml [tool.bandit]
 echo "[3/3] bandit SAST scan..."
-if bandit -r app.py -ll -s B110,B104,B608 2>&1; then
+if bandit -r app.py -c pyproject.toml -ll 2>&1; then
     echo "  PASS: bandit SAST scan clean"
     ((PASSED++))
 else

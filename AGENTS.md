@@ -65,22 +65,24 @@ kanban_complete(
 
 ## Deterministic Layer (from SDLC-013)
 
-After all 3 reviewers pass, the deterministic layer runs as a mechanical referee before deploy. It is **scripts, not agents** — no human judgment needed.
+After all 3 reviewers pass, the deterministic layer runs as a mechanical referee before deploy. It is **scripts, not agents** — no human judgment needed for "does it compile" or "do tests pass."
 
 **Run it:** `bash scripts/deterministic-check.sh`
 
 **What it checks:**
-| Tool | What | Exit |
-|------|------|------|
-| ruff | Lint errors + pyflakes (not style nits) | Fail on E/F/W |
-| mypy | Static type checking | Fail on type errors |
-| bandit | SAST — SQL injection, hardcoded secrets, unsafe patterns | Fail on High/Medium |
+
+| Tool | What | Config |
+|------|------|--------|
+| ruff | Lint errors + pyflakes (E/F/W rules only, no style nits) | `[tool.ruff]` in pyproject.toml |
+| mypy | Static type checking | `[tool.mypy]` in pyproject.toml |
+| bandit | SAST — SQL injection, hardcoded secrets, unsafe patterns | `[tool.bandit]` in pyproject.toml |
 
 **Rules:**
-- All 3 must pass. Any failure → card goes back to Code.
-- Suppressions are explicit in the script (e.g., `-s B110,B104,B608` for deliberate patterns).
-- Bandit `# nosec` comments must be on the same line as the flagged statement.
-- The script is the authority. If bandit fails, the reviewer PASS doesn't matter.
+- All 3 must pass. Any failure → card goes back to Code with the script's output.
+- Config is the single source of truth — all tool settings live in pyproject.toml (not command-line flags).
+- Bandit skips B101 (assert in tests), B104 (Docker bind to 0.0.0.0), B608 (f-string column names from own code with parameterized values).
+- The script is the authority. If the deterministic layer fails, the reviewer PASS doesn't matter.
+- Non-zero exit blocks deploy. Zero exit is the gate.
 
 ## Score Conventions (see sdlc-orchestration skill)
 
