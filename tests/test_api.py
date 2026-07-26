@@ -68,3 +68,21 @@ def test_get_user_by_id_invalid_id():
     data = r.json()
     assert "error" in data
     assert "integer" in data["error"].lower()
+
+
+def test_get_user_by_id_zero():
+    """GET /api/users/<id> returns 400 when id is zero."""
+    r = requests.get(f"{BASE_URL}/api/users/0")
+    assert r.status_code == 400
+    data = r.json()
+    assert "error" in data
+    assert "positive" in data["error"].lower()
+
+
+def test_get_user_by_id_negative():
+    """GET /api/users/<id> returns 400 when id is negative."""
+    r = requests.get(f"{BASE_URL}/api/users/-5")
+    assert r.status_code == 400
+    data = r.json()
+    assert "error" in data
+    assert "positive" in data["error"].lower()

@@ -103,19 +103,26 @@ def get_user(user_id: str):
     except (ValueError, TypeError):
         return jsonify({"error": "id must be an integer"}), 400
 
-    # Type-coercion safety check per AGENTS.md convention
-    if type(uid) is not int:
-        return jsonify({"error": "id must be an integer"}), 400
+    # Flask URL parameters are always str → int() always returns int.
+    # The SDLC-001 type-coercion check (type(x) is not int) applies to
+    # JSON-parsed inputs where bool can sneak in, not to URL path params.
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, username, email, age, active FROM users WHERE id = %s",
-        (uid,)
-    )
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
+    # Reject non-positive IDs (auto-increment primary keys start at 1)
+    if uid <= 0:
+        return jsonify({"error": "id must be a positive integer"}), 400
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, username, email, age, active FROM users WHERE id = %s",
+            (uid,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+    except psycopg2.Error:
+        return jsonify({"error": "database unavailable"}), 503
 
     if row is None:
         return jsonify({"error": "user not found"}), 404
