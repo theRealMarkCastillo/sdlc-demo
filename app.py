@@ -119,10 +119,11 @@ def get_user(user_id: str):
             (uid,)
         )
         row = cur.fetchone()
-        cur.close()
-        conn.close()
     except psycopg2.Error:
         return jsonify({"error": "database unavailable"}), 503
+    finally:
+        cur.close()
+        conn.close()
 
     if row is None:
         return jsonify({"error": "user not found"}), 404
