@@ -1,42 +1,38 @@
-# SDLC Integration
+# SDLC System Integration
 
-This project is built incrementally through the **Hermes SDLC pipeline** (multi-reviewer AND-gate, retry protocol, automated monitor).
+This project is built and maintained through the **Hermes SDLC pipeline** — multi-reviewer AND-gate, retry protocol, automated monitor, structured Telegram human gates.
 
-The SDLC orchestrator lives separately (not in this repo). It handles:
-- Decomposing feature requests into cards on the **Hermes kanban board** (`HERMES_KANBAN_BOARD=sdlc`)
-- Dispatching cards to specialized worker subagents (software-engineer, three reviewers, deployer)
-- Applying the multi-reviewer AND-gate (security, spec, quality)
-- Routing reviewer disagreements to a tiebreaker
-- Forcing rulebook updates (AGENTS.md) when patterns recur (closed loop)
-- Sending human-in-the-loop approvals via Telegram
+## Where the SDLC system lives
 
-This project's role in that flow: a **target project**. The orchestrator dispatches code-generation tasks here, runs tests against staging (port 5001), and ships production (port 5002) after human approval.
+The pipeline itself is **separate from this repo**:
 
-## Project conventions used by the SDLC system
+| Component | Location |
+|-----------|----------|
+| Board | Hermes kanban (`HERMES_KANBAN_BOARD=sdlc`) |
+| Skills | `~/.hermes/skills/workers/sdlc*/` |
+| Profile | `~/.hermes/profiles/sdlc-monitor/` |
+| Plan | `~/.hermes/plans/2026-07-26-hermes-sdlc-architecture.md` |
+| Cron scripts | `~/.hermes/scripts/sdlc-*.py` |
+| **This project** | `~/git/sdlc-demo/` |
 
-When a worker subagent generates code in this repo, it reads `AGENTS.md` first. The `AGENTS.md` here encodes:
-- Tech stack and Python conventions
-- Closed-loop rules from earlier cards (e.g., type-coercion handling)
-- Never-log-PII rule
+## What the orchestrator does with this repo
 
-## Verifying an SDLC card against this project
+When a card reaches the **Code** stage, the orchestrator:
 
-When a card on the Hermes kanban board reaches Test/CI stage for code in this repo, the three reviewers verify against:
-1. **Security** — OWASP checks, parameterized queries (psycopg2 `%s`), no hardcoded secrets
-2. **Spec** — tests in `tests/` cover the DoD; live staging (`localhost:5001`) passes
-3. **Quality** — type hints, docstrings, no dead code, DRY (no duplication per the closed-loop rule)
+1. Reads this project's `AGENTS.md` (closed-loop rules from earlier cards)
+2. Dispatches a worker subagent with goal + DoD + AGENTS.md context
+3. Worker writes code, runs tests, commits to this repo's git history
+4. Orchestrator dispatches 3 reviewers in parallel
+5. AND-gate routes to deploy or retry per [REVIEW-PROCESS.md](REVIEW-PROCESS.md)
+6. For P0/P1 cards, waits for human Telegram approval before deploying
 
-## Deploy via SDLC
+## Where the SDLC gets its rules
 
-The orchestrator runs:
-```bash
-# Staging
-docker compose -f docker-compose.staging.yml -p sdlc-staging up -d --build
-curl http://localhost:5001/health
+The orchestrator edits the **rulebook** when patterns recur:
 
-# Production (after human approval)
-docker compose -f docker-compose.prod.yml -p sdlc-prod up -d --build
-curl http://localhost:5002/health
-```
+- **Code conventions** → this project's `AGENTS.md`
+- **Security findings** → `AGENTS.md` Security Rules section
+- **Process thresholds** → `~/.hermes/skills/workers/sdlc-governance/`
+- **Tooling changes** → `~/.hermes/scripts/sdlc-*.py`
 
-See `docs/DEPLOYMENT.md` for details.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
