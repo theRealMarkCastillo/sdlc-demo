@@ -32,7 +32,7 @@ This plan maps that architecture to Hermes:
 | Multiple review agents per PR | Multiple `delegate_task` subagents, each with different review scope |
 | Agent-to-agent over Slack | Gateway (Telegram/Discord) |
 | SIEM / audit trail | Session DB + git history on wiki + cron logging |
-| Kanban board | SDLC board at `~/wiki/stigmergy/sdlc-board/board.md` |
+| Kanban board | Hermes kanban board `sdlc` (managed via `kanban_create`, `kanban_comment`, `kanban_complete`) |
 | Risk-tiered codebase | Card priority (P0-P3) + human-gate placement |
 
 ---
@@ -99,7 +99,9 @@ The orchestrator is **outside the loop** — it doesn't do the work, it edits th
 
 ### The Board as State
 
-The kanban board at `~/wiki/stigmergy/sdlc-board/board.md` is the single source of truth. Every card carries enough context for a fresh subagent to pick it up. Git history on the board IS the audit trail — every state change is a commit with `sdlc:` prefix. Cards flow through lanes as a cycle:
+The SDLC board is a **Hermes kanban board** (`HERMES_KANBAN_BOARD=sdlc`). Every card carries enough context for a fresh subagent to pick it up. Cards flow through stages tracked via kanban comments and assignee changes — not wiki files. The wiki is for companions only; SDLC state lives in the kanban system and git commits on the project repo.
+
+**The cycle on the board:**
 
 ```
         ┌─ Ideation (humans)
@@ -108,7 +110,7 @@ The kanban board at `~/wiki/stigmergy/sdlc-board/board.md` is the single source 
    Done ← Deploy ← Test/CI ← Code ← Plan
     ↑                                │
     │                                ▼
-   Monitor ── (incident creates new Ideation card)
+   Monitor ── (incident creates new Backlog/Ideation card)
 ```
 
 The Monitor lane on the board is for **post-deploy verification** of in-flight cards. Production incidents detected by the monitor profile create **new Backlog/Ideation cards** — the loop closes.
@@ -373,13 +375,14 @@ enabled_toolsets: [web, file_read, kanban]
 
 ## Board Structure
 
+The SDLC board is a **Hermes kanban board** (`sdlc`). All operations go through `kanban_create`, `kanban_comment`, `kanban_complete`, `kanban_list`. The board config lives in Hermes state, not in the wiki.
+
 ```
-~/wiki/stigmergy/sdlc-board/
-├── board.md              # Active kanban board (SDLC lanes)
-├── archive/              # Completed cards (by week)
-│   └── 2026-W31.md
-└── metrics.md            # Rolling metrics dashboard
+hermes kanban list          # View all cards on the sdlc board
+hermes kanban show <id>     # View a card's full body + comments
 ```
+
+Archive state is the git history of the project repo (`~/git/sdlc-demo`), not wiki files. Every card completion is a commit; every closed-loop edit to AGENTS.md is a commit.
 
 ### Card Template (extends CoS card format with SDLC-specific fields):
 
@@ -434,50 +437,53 @@ enabled_toolsets: [web, file_read, kanban]
 | Deploy stage | None | Staging + smoke + DAST + approval |
 | Monitor | None | Cron-based incident response |
 | Closed loop | None | Bug class → AGENTS.md → future code |
-| Audit trail | Board git log | Board git log + session DB + metrics |
+| Audit trail | Kanban comments + session DB | Kanban comments + session DB + Langfuse scores + git history |
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Core SDLC Orchestration (week 1)
-- Create `sdlc-orchestration` skill
-- Create board at `~/wiki/stigmergy/sdlc-board/board.md`
-- Implement card template with SDLC-specific fields
-- Implement risk tiering logic (P0-P3)
-- Port card decomposition from cos-orchestration
+All six phases were completed July 2026 across 8 SDLC cards (SDLC-001 through SDLC-008). The system is operational, not theoretical.
 
-### Phase 2: Multi-Reviewer Pattern (week 1-2)
-- Create `sdlc-security-review` skill
-- Create spec compliance review logic
-- Create code quality review logic
-- Implement AND-gate (all three must pass)
-- Implement retry loop (max 3, then escalate)
-- Implement shadow mode for new reviewers
+### Phase 1: Core SDLC Orchestration ✅
+- Created `sdlc-orchestration` skill (workers/sdlc-orchestration/SKILL.md)
+- Created kanban board `sdlc` (Hermes kanban, not wiki)
+- Implemented card template with SDLC-specific fields
+- Implemented risk tiering logic (P0-P3)
+- Ported card decomposition from cos-orchestration
 
-### Phase 3: Closed Loop (week 2)
-- Implement AGENTS.md update on review findings
-- Implement skill patching from discovered bug classes
-- Verify: bug found → instruction updated → next card avoids it
+### Phase 2: Multi-Reviewer Pattern ✅
+- Created `sdlc-security-review` skill
+- Implemented spec compliance + code quality review logic
+- Implemented AND-gate (all three must pass)
+- Implemented retry loop (max 3, then escalate)
+- Proven via SDLC-006 (deactivate endpoint) — first pass PASS on all 3 reviewers
 
-### Phase 4: Deploy Stage (week 2-3)
-- Create `sdlc-deploy` skill
-- Implement staging deploy workflow
-- Implement smoke tests
-- Implement human approval gate for P0/P1
+### Phase 3: Closed Loop ✅
+- Implemented AGENTS.md update on review findings (SDLC-001 security rule)
+- Implemented skill patching from discovered bug classes
+- Verified: type-coercion bug found → AGENTS.md updated → SDLC-002 avoided it
+- Verified: rollback-crash bug → app.py patched → SDLC-008 closed the loop
 
-### Phase 5: Monitor Stage (week 3)
-- Create `sdlc-monitor` skill
-- Create incident response profile (separate Hermes profile)
-- Implement log scanning cron
-- Implement card creation from alerts
-- Verify permission boundary (monitor cannot deploy)
+### Phase 4: Deploy Stage ✅
+- Created `sdlc-deploy` skill
+- Implemented staging deploy workflow (docker compose)
+- Implemented smoke tests
+- Implemented human approval gate for P0/P1 (Telegram DMs, structured approval format)
+- Staging at port 5001, production at port 5002
 
-### Phase 6: Governance (week 3-4)
-- Implement metrics dashboard in board header
-- Implement sampling (10% of P2, 100% of P0)
-- Implement agent-action audit trail
-- Document the whole system in wiki
+### Phase 5: Monitor Stage ✅
+- Created `sdlc-monitor` skill + separate Hermes profile
+- Implemented log scanning cron (15m), dep audit (daily), secrets scan (4h)
+- Implemented card creation from alerts (SDLC-004, SDLC-005 auto-created)
+- Verified permission boundary (monitor cannot deploy)
+- Recurrence dedup proven (SDLC-005)
+
+### Phase 6: Governance ✅
+- Implemented Langfuse score conventions (7 score types)
+- Implemented inline governance (closed-loop check after each Test/CI stage)
+- Implemented score-driven process edits
+- Agent-action audit trail via session DB + kanban comments + git history
 
 ---
 
@@ -497,12 +503,14 @@ enabled_toolsets: [web, file_read, kanban]
 
 ---
 
-## Next Steps
+## Current State (2026-07-26)
 
-1. Create `sdlc-orchestration` skill with Phase 1 scope
-2. Initialize the SDLC board
-3. Write the first card as a test
-4. Dispatch it through Plan → Code → Test/CI → Done
-5. Iterate on the multi-reviewer pattern
+All six implementation phases complete. 8 cards through the system. The SDLC orchestration, multi-reviewer AND-gate, closed-loop editing, deploy pipeline, monitor profile, and Langfuse governance are all operational.
 
-**Ready to start Phase 1 when you are.**
+**Open work:**
+- README endpoint table is missing `POST /api/users/<id>/deactivate`
+- Shadow mode for new reviewer types (implemented in code, hasn't been exercised yet)
+- Metrics sampling (10% P2, 100% P0 — governance hook exists, needs a cron trigger)
+- `PATCH /api/users/<id>` endpoint (RESTful update)
+- `DELETE /api/users/<id>` endpoint (RESTful delete)
+- Email format validation hardening (current: only checks for `@`)
