@@ -1,6 +1,8 @@
 """SDLC Demo App — a minimal Flask + PostgreSQL API."""
 
 import os
+from functools import wraps
+
 import psycopg2
 from flask import Flask, request, jsonify
 
@@ -24,6 +26,78 @@ if not DB_USER or not DB_PASS:
         "Check your .env file — values may be blank."
     )
 
+# --- Auth config ---
+
+try:
+    SDLC_API_KEY = os.environ["SDLC_API_KEY"]
+except KeyError as e:
+    raise RuntimeError(
+        f"Missing required environment variable: {e.args[0]}. "
+        f"Set it to a secure random string for API authentication."
+    ) from e
+
+if not SDLC_API_KEY:
+    raise RuntimeError(
+        "SDLC_API_KEY must be non-empty. "
+        "Check your .env file — the value may be blank."
+    )
+
+# Key → user_id mapping for identity checks on user-scoped endpoints.
+# Set SDLC_API_KEY_USER_ID to the user ID associated with SDLC_API_KEY.
+# Falls back to None (identity checks disabled) when unset.
+_API_KEY_USER_ID_RAW = os.environ.get("SDLC_API_KEY_USER_ID", "")
+SDLC_API_KEY_USER_ID = int(_API_KEY_USER_ID_RAW) if _API_KEY_USER_ID_RAW else None
+
+
+# --- Auth decorators ---
+
+def require_api_key(f):
+    """Decorator: require valid X-API-Key header. Returns 401 if missing/invalid."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = request.headers.get("X-API-Key")
+        if not api_key:
+            return jsonify({"error": "missing API key"}), 401
+        if api_key != SDLC_API_KEY:
+            return jsonify({"error": "invalid API key"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_identity_match(f):
+    """Decorator: require caller's API key identity matches the target user_id.
+
+    Must be stacked inside @require_api_key. Uses SDLC_API_KEY_USER_ID
+    to verify the authenticated caller owns the resource being modified.
+    Returns 403 on identity mismatch, 500 if mapping is not configured.
+
+    Non-integer, zero, and negative IDs pass through to the endpoint
+    for proper validation — identity is only enforced for valid user IDs.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = kwargs.get("user_id")
+        if SDLC_API_KEY_USER_ID is None:
+            return jsonify(
+                {"error": "API key identity mapping not configured"}
+            ), 500
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            # Non-integer — let endpoint handle validation
+            return f(*args, **kwargs)
+        if uid <= 0:
+            # Zero or negative — let endpoint handle validation
+            return f(*args, **kwargs)
+        if SDLC_API_KEY_USER_ID != uid:
+            return jsonify(
+                {"error": "identity mismatch — you can only update your own user"}
+            ), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+# --- Database ---
 
 def get_db():
     return psycopg2.connect(
@@ -31,6 +105,8 @@ def get_db():
         user=DB_USER, password=DB_PASS
     )
 
+
+# --- Endpoints ---
 
 @app.route("/health")
 def health():
@@ -66,6 +142,7 @@ def list_users():
 
 
 @app.route("/api/users", methods=["POST"])
+@require_api_key
 def create_user():
     data = request.get_json() or {}
     username = data.get("username", "")
@@ -164,6 +241,7 @@ def get_user(user_id: str):
 
 
 @app.route("/api/users/<user_id>/deactivate", methods=["POST"])
+@require_api_key
 def deactivate_user(user_id: str):
     """Deactivate a user by ID. Idempotent — deactivating an already-inactive user returns 200.
 
@@ -224,6 +302,8 @@ def deactivate_user(user_id: str):
 
 
 @app.route("/api/users/<user_id>", methods=["PUT"])
+@require_api_key
+@require_identity_match
 def update_user(user_id: str):
     """Update an existing user's username, email, and/or age.
 

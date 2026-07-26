@@ -34,6 +34,8 @@ services:
       DB_NAME: sdlc_demo
       DB_USER: sdlc_user
       DB_PASS: ${DB_PASS}
+      SDLC_API_KEY: ${SDLC_API_KEY}
+      SDLC_API_KEY_USER_ID: ${SDLC_API_KEY_USER_ID:-1}
     depends_on:
       db:
         condition: service_healthy

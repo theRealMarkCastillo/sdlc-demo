@@ -9,8 +9,12 @@ import psycopg2
 # to temporarily remove these and then importlib.reload().
 os.environ.setdefault("DB_USER", "sdlc_user_test")
 os.environ.setdefault("DB_PASS", "sdlc_pass_test")
+os.environ.setdefault("SDLC_API_KEY", "test-api-key-for-sdlc-demo")
+os.environ.setdefault("SDLC_API_KEY_USER_ID", "1")
 
 BASE_URL = os.environ.get("TEST_URL", "http://localhost:5000")
+
+AUTH_HEADER = {"X-API-Key": "test-api-key-for-sdlc-demo"}
 
 
 def test_health():
@@ -195,7 +199,7 @@ def test_deactivate_user_db_unavailable(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", raise_operational_error)
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         data = r.get_json()
         assert data["error"] == "database unavailable"
@@ -208,7 +212,7 @@ def test_deactivate_user_rollback_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -246,7 +250,7 @@ def test_create_user_db_unavailable(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", raise_operational_error)
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30
@@ -427,7 +431,7 @@ def test_create_user_cursor_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30,
@@ -443,7 +447,7 @@ def test_create_user_execute_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30,
@@ -459,7 +463,7 @@ def test_create_user_fetchone_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30,
@@ -475,7 +479,7 @@ def test_create_user_commit_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30,
@@ -491,7 +495,7 @@ def test_create_user_rollback_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "testuser",
             "email": "test@example.com",
             "age": 30,
@@ -522,7 +526,7 @@ def test_create_user_fetchone_returns_none(monkeypatch):
 
     monkeypatch.setattr(app_module, "get_db", lambda: FakeConn())
     with app_module.app.test_client() as client:
-        r = client.post("/api/users", json={
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
             "username": "test", "email": "t@t.com", "age": 30,
         })
         assert r.status_code == 503
@@ -577,7 +581,7 @@ def test_deactivate_user_cursor_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -589,7 +593,7 @@ def test_deactivate_user_execute_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -601,7 +605,7 @@ def test_deactivate_user_fetchone_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -613,7 +617,7 @@ def test_deactivate_user_commit_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
 
     with app_module.app.test_client() as client:
-        r = client.post("/api/users/1/deactivate")
+        r = client.post("/api/users/1/deactivate", headers=AUTH_HEADER)
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -784,7 +788,7 @@ def test_update_user_invalid_id():
     """PUT /api/users/<id> returns 400 when id is not an integer."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/abc", json={"username": "validuser"})
+        r = client.put("/api/users/abc", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 400
         assert "integer" in r.get_json()["error"].lower()
 
@@ -793,7 +797,7 @@ def test_update_user_zero_id():
     """PUT /api/users/<id> returns 400 when id is zero."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/0", json={"username": "validuser"})
+        r = client.put("/api/users/0", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 400
         assert "positive" in r.get_json()["error"].lower()
 
@@ -802,7 +806,7 @@ def test_update_user_negative_id():
     """PUT /api/users/<id> returns 400 when id is negative."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/-5", json={"username": "validuser"})
+        r = client.put("/api/users/-5", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 400
         assert "positive" in r.get_json()["error"].lower()
 
@@ -811,7 +815,7 @@ def test_update_user_username_too_short():
     """PUT /api/users/<id> returns 400 when username < 3 chars."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "ab"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "ab"})
         assert r.status_code == 400
         assert "3 chars" in r.get_json()["error"].lower()
 
@@ -820,7 +824,7 @@ def test_update_user_email_missing_at():
     """PUT /api/users/<id> returns 400 when email lacks '@'."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"email": "no_at_sign"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"email": "no_at_sign"})
         assert r.status_code == 400
         assert "email" in r.get_json()["error"].lower()
 
@@ -829,7 +833,7 @@ def test_update_user_email_not_string():
     """PUT /api/users/<id> returns 400 when email is not a string (per AGENTS.md)."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"email": 12345})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"email": 12345})
         assert r.status_code == 400
         assert "string" in r.get_json()["error"].lower()
 
@@ -838,7 +842,7 @@ def test_update_user_age_bool():
     """PUT /api/users/<id> returns 400 when age is a bool (type-coercion, per AGENTS.md)."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"age": True})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"age": True})
         assert r.status_code == 400
         assert "integer" in r.get_json()["error"].lower()
 
@@ -847,7 +851,7 @@ def test_update_user_age_float():
     """PUT /api/users/<id> returns 400 when age is a float (not int, per AGENTS.md)."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"age": 30.5})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"age": 30.5})
         assert r.status_code == 400
         assert "integer" in r.get_json()["error"].lower()
 
@@ -856,7 +860,7 @@ def test_update_user_no_fields():
     """PUT /api/users/<id> returns 400 when body has none of username/email/age."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"irrelevant": "data"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"irrelevant": "data"})
         assert r.status_code == 400
         err = r.get_json()["error"].lower()
         assert any(k in err for k in ("username", "email", "age"))
@@ -866,7 +870,7 @@ def test_update_user_empty_body():
     """PUT /api/users/<id> returns 400 when body is empty."""
     import app as app_module
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={})
         assert r.status_code == 400
 
 
@@ -884,7 +888,7 @@ def test_update_user_db_unavailable(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", raise_operational_error)
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -896,7 +900,7 @@ def test_update_user_cursor_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCursorError())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -908,7 +912,7 @@ def test_update_user_execute_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForExecute())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -920,7 +924,7 @@ def test_update_user_fetchone_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnForFetch())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -932,7 +936,7 @@ def test_update_user_commit_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitError())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -944,7 +948,7 @@ def test_update_user_rollback_raises(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: _FakeConnCommitAndRollbackError())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
 
@@ -979,6 +983,161 @@ def test_update_user_fetchone_returns_none(monkeypatch):
     monkeypatch.setattr(app_module, "get_db", lambda: FakeConnNone())
 
     with app_module.app.test_client() as client:
-        r = client.put("/api/users/1", json={"username": "validuser"})
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={"username": "validuser"})
         assert r.status_code == 503
         assert r.get_json()["error"] == "database unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Auth middleware tests
+# ---------------------------------------------------------------------------
+
+
+def test_create_user_missing_api_key():
+    """POST /api/users returns 401 when X-API-Key header is missing."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 401
+        assert "missing API key" in r.get_json()["error"]
+
+
+def test_create_user_invalid_api_key():
+    """POST /api/users returns 401 when X-API-Key header is invalid."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers={"X-API-Key": "wrong-key"}, json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "age": 30,
+        })
+        assert r.status_code == 401
+        assert "invalid API key" in r.get_json()["error"]
+
+
+def test_create_user_valid_api_key():
+    """POST /api/users with valid API key passes auth (reaches validation, returns 400)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "ab",  # too short
+            "email": "test@example.com",
+            "age": 30,
+        })
+        # Auth passed — we hit validation, which returns 400 for short username
+        assert r.status_code == 400
+        assert "3 chars" in r.get_json()["error"]
+
+
+def test_deactivate_user_missing_api_key():
+    """POST /api/users/<id>/deactivate returns 401 when X-API-Key is missing."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate")
+        assert r.status_code == 401
+        assert "missing API key" in r.get_json()["error"]
+
+
+def test_deactivate_user_invalid_api_key():
+    """POST /api/users/<id>/deactivate returns 401 for invalid API key."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users/1/deactivate", headers={"X-API-Key": "wrong"})
+        assert r.status_code == 401
+        assert "invalid API key" in r.get_json()["error"]
+
+
+def test_update_user_missing_api_key():
+    """PUT /api/users/<id> returns 401 when X-API-Key is missing."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", json={"username": "validuser"})
+        assert r.status_code == 401
+        assert "missing API key" in r.get_json()["error"]
+
+
+def test_update_user_invalid_api_key():
+    """PUT /api/users/<id> returns 401 for invalid API key."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", headers={"X-API-Key": "wrong"}, json={
+            "username": "validuser"
+        })
+        assert r.status_code == 401
+        assert "invalid API key" in r.get_json()["error"]
+
+
+def test_update_user_identity_mismatch(monkeypatch):
+    """PUT /api/users/<id> returns 403 when API key maps to a different user."""
+    import app as app_module
+
+    # The test API key maps to user ID 1 (set in module-level env).
+    # Request to update user 2 → identity mismatch.
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/2", headers=AUTH_HEADER, json={
+            "username": "validuser"
+        })
+        assert r.status_code == 403
+        data = r.get_json()
+        assert "identity mismatch" in data["error"]
+
+
+def test_update_user_valid_auth_reaches_validation(monkeypatch):
+    """PUT /api/users/<id> with valid key and matching identity reaches validation (400)."""
+    import app as app_module
+
+    # Key maps to user 1 → updating user 1 should pass identity check
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={
+            "username": "ab"  # too short — proves we got past auth
+        })
+        assert r.status_code == 400
+        assert "3 chars" in r.get_json()["error"]
+
+
+def test_update_user_identity_mapping_not_configured(monkeypatch):
+    """PUT /api/users/<id> returns 500 when SDLC_API_KEY_USER_ID is None."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", None)
+
+    with app_module.app.test_client() as client:
+        r = client.put("/api/users/1", headers=AUTH_HEADER, json={
+            "username": "validuser"
+        })
+        assert r.status_code == 500
+        assert "identity mapping not configured" in r.get_json()["error"]
+
+
+def test_app_crashes_when_api_key_missing(monkeypatch):
+    """app.py raises RuntimeError on import when SDLC_API_KEY is not set."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.setenv("DB_USER", "test_user")
+    monkeypatch.setenv("DB_PASS", "test_pass")
+    monkeypatch.delenv("SDLC_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError):
+        importlib.reload(app_module)
+
+
+def test_app_crashes_when_api_key_empty(monkeypatch):
+    """app.py raises RuntimeError on import when SDLC_API_KEY is empty string."""
+    import importlib
+    import app as app_module
+
+    monkeypatch.setenv("DB_USER", "test_user")
+    monkeypatch.setenv("DB_PASS", "test_pass")
+    monkeypatch.setenv("SDLC_API_KEY", "")
+
+    with pytest.raises(RuntimeError):
+        importlib.reload(app_module)

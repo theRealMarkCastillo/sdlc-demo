@@ -64,12 +64,28 @@ alembic downgrade base  # revert all migrations
 
 ## Endpoints
 
+All mutating endpoints (POST, PUT, DELETE) require an `X-API-Key` header. GET endpoints are public.
+
 | Method | Path | Status |
 |--------|------|--------|
 | GET | `/health` | 200 if DB connected |
 | GET | `/api/users` | 200, list |
-| POST | `/api/users` | 201 created, 400 invalid |
+| POST | `/api/users` | 201 created, 401 no key, 400 invalid |
 | GET | `/api/users/<id>` | 200 found, 400 invalid/negative, 404 not found, 503 DB unavailable |
+| POST | `/api/users/<id>/deactivate` | 200 deactivated, 401 no key, 404 not found |
+| PUT | `/api/users/<id>` | 200 updated, 401 no key, 403 identity mismatch, 404 not found |
+
+### Authentication
+
+All mutating endpoints require an `X-API-Key` header with the value of `SDLC_API_KEY`. Example:
+
+```bash
+curl -H "X-API-Key: your-api-key-here" -X POST http://localhost:5001/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "email": "alice@example.com", "age": 30}'
+```
+
+**Identity check:** PUT `/api/users/<id>` additionally verifies that the caller's API key maps to the target user ID (via `SDLC_API_KEY_USER_ID`). You can only update your own user — attempting to update another user returns 403.
 
 ## Project Structure
 
@@ -115,6 +131,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline state.
 | `DB_NAME` | sdlc_demo | Database name |
 | `DB_USER` | required — set in .env | Database user |
 | `DB_PASS` | required — set in .env | Database password |
+| `SDLC_API_KEY` | required — set in .env | API key for mutating endpoints |
+| `SDLC_API_KEY_USER_ID` | 1 | User ID mapped to SDLC_API_KEY (for identity check on PUT) |
 
 These are set in the docker-compose files; a `.env` file is required for local development — copy `.env.example` to `.env` and fill in values.
 
