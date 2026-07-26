@@ -1273,7 +1273,12 @@ def test_create_user_age_float():
 
 
 def test_create_user_age_zero_not_rejected_by_typecoercion():
-    """POST /api/users with age=0 passes type-coercion check (0 is valid int)."""
+    """POST /api/users with age=0 passes type-coercion check (0 is valid int).
+
+    Tighter than `not in (400,)` — accepts only the two valid outcomes:
+    201 (DB up, row created) or 503 (DB unavailable). Anything else (e.g. a
+    500 from a hidden regression in the type guard) would fail this test.
+    """
     import app as app_module
     with app_module.app.test_client() as client:
         r = client.post("/api/users", headers=AUTH_HEADER, json={
@@ -1281,9 +1286,7 @@ def test_create_user_age_zero_not_rejected_by_typecoercion():
             "email": "t@t.com",
             "age": 0
         })
-        # Type check passes; the error (if any) is from the DB, not a 400
-        assert r.status_code not in (400,)
-        # Could be 503 if DB is down or 201 if up; either is ok for this test
+        assert r.status_code in (201, 503)
 
 
 def test_search_by_username():
