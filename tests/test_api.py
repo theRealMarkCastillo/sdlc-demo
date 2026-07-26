@@ -631,7 +631,7 @@ def test_app_crashes_when_db_pass_missing(monkeypatch):
     monkeypatch.setenv("DB_USER", "test_user")
     monkeypatch.delenv("DB_PASS", raising=False)
 
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         importlib.reload(app_module)
 
 
@@ -643,7 +643,7 @@ def test_app_crashes_when_db_user_missing(monkeypatch):
     monkeypatch.setenv("DB_PASS", "test_pass")
     monkeypatch.delenv("DB_USER", raising=False)
 
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         importlib.reload(app_module)
 
 
@@ -655,7 +655,7 @@ def test_app_crashes_when_both_credentials_missing(monkeypatch):
     monkeypatch.delenv("DB_USER", raising=False)
     monkeypatch.delenv("DB_PASS", raising=False)
 
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         importlib.reload(app_module)
 
 
@@ -678,9 +678,31 @@ def test_app_infra_vars_keep_defaults(monkeypatch):
 
 def test_app_imports_cleanly_with_credentials_set():
     """app.py imports without error when all required env vars are present."""
-    import importlib
-    import importlib.util
+    import subprocess
+    import sys
 
-    # Verify module is importable (env vars are set by the test runner context)
-    spec = importlib.util.find_spec("app")
-    assert spec is not None
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Positive case: both DB_USER and DB_PASS set -> import succeeds
+    env = os.environ.copy()
+    env["DB_USER"] = "test_user"
+    env["DB_PASS"] = "test_pass"
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); import app"],
+        capture_output=True, text=True, env=env, cwd=repo_root,
+    )
+    assert result.returncode == 0, (
+        f"app import failed with return code {result.returncode}\n"
+        f"stderr: {result.stderr}\nstdout: {result.stdout}"
+    )
+
+    # Negative case: missing DB_PASS -> import fails with exit code 1
+    env.pop("DB_PASS")
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); import app"],
+        capture_output=True, text=True, env=env, cwd=repo_root,
+    )
+    assert result.returncode != 0, (
+        "app import should have failed when DB_PASS is missing, "
+        f"but got return code {result.returncode}"
+    )
