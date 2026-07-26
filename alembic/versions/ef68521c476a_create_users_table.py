@@ -26,10 +26,12 @@ def upgrade() -> None:
         sa.Column("username", sa.String(100), nullable=False),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("age", sa.Integer(), nullable=False),
-        sa.Column("active", sa.Boolean(), server_default=sa.text("TRUE")),
+        # sa.text("TRUE") / sa.text("NOW()") are PostgreSQL-specific defaults.
+        sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("TRUE")),
         sa.Column(
             "created_at",
             sa.DateTime(),
+            nullable=False,
             server_default=sa.text("NOW()"),
         ),
     )

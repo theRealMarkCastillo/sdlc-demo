@@ -27,7 +27,7 @@ This project uses [Alembic](https://alembic.sqlalchemy.org/) for database migrat
 Set `DATABASE_URL` to your local Postgres instance, then run migrations:
 
 ```bash
-export DATABASE_URL=postgresql://sdlc_user:sdlc_pass@localhost:5433/sdlc_demo
+export DATABASE_URL=postgresql://sdlc_user:${DB_PASS}@localhost:5433/sdlc_demo
 alembic upgrade head
 ```
 
@@ -76,7 +76,7 @@ alembic downgrade base  # revert all migrations
 ```
 sdlc-demo/
 ├── app.py                    # Flask app (~215 lines, single file for demo)
-├── tests/test_api.py         # 34 tests
+# tests/test_api.py         # 39 tests
 ├── Dockerfile                # Python 3.12 + Flask + psycopg2 + Alembic
 ├── entrypoint.sh             # Run migrations then start app
 ├── alembic.ini               # Alembic configuration
@@ -109,11 +109,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline state.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `DATABASE_URL` | (required) | Postgres connection string for Alembic |
 | `DB_HOST` | localhost | Postgres host |
 | `DB_PORT` | 5432 | Postgres port |
 | `DB_NAME` | sdlc_demo | Database name |
-| `DB_USER` | sdlc_user | Database user |
-| `DB_PASS` | sdlc_pass | Database password |
+| `DB_USER` | (required) | Database user |
+| `DB_PASS` | (required) | Database password |
 
 These are set in the docker-compose files; no `.env` needed for local development.
 
