@@ -29,8 +29,14 @@ if not DATABASE_URL:
     DB_HOST = os.environ.get("DB_HOST", "localhost")
     DB_PORT = os.environ.get("DB_PORT", "5432")
     DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
-    DB_USER = os.environ["DB_USER"]
-    DB_PASS = os.environ["DB_PASS"]
+    try:
+        DB_USER = os.environ["DB_USER"]
+        DB_PASS = os.environ["DB_PASS"]
+    except KeyError as e:
+        raise RuntimeError(
+            f"Missing required environment variable for migrations: {e.args[0]}. "
+            f"Set DATABASE_URL or the DB_USER/DB_PASS pair in your environment."
+        ) from e
     DATABASE_URL = (
         f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
