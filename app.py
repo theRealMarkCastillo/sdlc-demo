@@ -137,6 +137,56 @@ def get_user(user_id: str):
     })
 
 
+@app.route("/api/users/<user_id>/deactivate", methods=["POST"])
+def deactivate_user(user_id: str):
+    """Deactivate a user by ID. Idempotent — deactivating an already-inactive user returns 200.
+
+    Args:
+        user_id: The user ID from the URL path.
+
+    Returns:
+        JSON user object with active=false on success, or error response.
+    """
+    # Validate id is a valid integer at the API boundary
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "id must be an integer"}), 400
+
+    # Reject non-positive IDs (auto-increment primary keys start at 1)
+    if uid <= 0:
+        return jsonify({"error": "id must be a positive integer"}), 400
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        # UPDATE ... RETURNING fetches the updated row in one round trip.
+        # If no row matches, RETURNING yields nothing → cur.fetchone() is None.
+        cur.execute(
+            "UPDATE users SET active = %s WHERE id = %s "
+            "RETURNING id, username, email, age, active",
+            (False, uid)
+        )
+        row = cur.fetchone()
+        conn.commit()
+    except psycopg2.Error:
+        return jsonify({"error": "database unavailable"}), 503
+    finally:
+        cur.close()
+        conn.close()
+
+    if row is None:
+        return jsonify({"error": "user not found"}), 404
+
+    return jsonify({
+        "id": row[0],
+        "username": row[1],
+        "email": row[2],
+        "age": row[3],
+        "active": row[4],
+    })
+
+
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=5000, debug=False)
