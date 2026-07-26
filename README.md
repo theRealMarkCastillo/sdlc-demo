@@ -56,11 +56,12 @@ alembic downgrade base  # revert all migrations
 |-----|----------------|
 | **[docs/PLAN.md](docs/PLAN.md)** | Original design plan with 3 source citations and design decisions |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | 8-node cycle, identity scopes, storage map, with diagrams |
+| **[docs/SDLC-SYSTEM.md](docs/SDLC-SYSTEM.md)** | Full walkthrough: pipeline, scoring, governance, cron, identity |
+| **[docs/API.md](docs/API.md)** | Endpoints, auth, identity check, request/response examples |
 | **[docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md)** | How monitor catches production issues and routes to fix |
 | **[docs/REVIEW-PROCESS.md](docs/REVIEW-PROCESS.md)** | Multi-reviewer AND-gate, tiebreaker, retry protocol |
 | **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Staging vs prod infrastructure, log pipeline, smoke tests |
-| **[docs/API.md](docs/API.md)** | Endpoints, request/response examples |
-| **[docs/SDLC-SYSTEM.md](docs/SDLC-SYSTEM.md)** | How this project fits into the SDLC pipeline |
+| **[docs/RUNBOOK.md](docs/RUNBOOK.md)** | Operations: deploy, rollback, rotate secrets, recover, query scores |
 
 ## Endpoints
 
@@ -80,26 +81,37 @@ All mutating endpoints (POST, PUT, DELETE) require an `X-API-Key` header. GET en
 All mutating endpoints require an `X-API-Key` header with the value of `SDLC_API_KEY`. Example:
 
 ```bash
-curl -H "X-API-Key: your-api-key-here" -X POST http://localhost:5001/api/users \
+curl -H "X-API-Key: $SDLC_API_KEY" -X POST http://localhost:5001/api/users \
   -H "Content-Type: application/json" \
   -d '{"username": "alice", "email": "alice@example.com", "age": 30}'
 ```
 
 **Identity check:** PUT `/api/users/<id>` additionally verifies that the caller's API key maps to the target user ID (via `SDLC_API_KEY_USER_ID`). You can only update your own user — attempting to update another user returns 403.
 
-## Project Structure
+See [docs/API.md](docs/API.md) for full endpoint reference with all error cases and validation rules.
 
-```
-sdlc-demo/
-├── app.py                    # Flask app (~300 lines, single file for demo)
-├── tests/test_api.py         # 71 tests
-├── Dockerfile                # Python 3.12 + Flask + psycopg2 + Alembic
-├── entrypoint.sh             # Run migrations then start app
-├── alembic.ini               # Alembic configuration
-├── alembic/                  # Migration scripts
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions/
+## SDLC Integration
+
+This project was built by SDLC cards on the Hermes kanban board (`HERMES_KANBAN_BOARD=sdlc`):
+
+| Card | Feature | Risk |
+|------|---------|------|
+| SDLC-001 | Input validation, type-coercion closed loop | P1 |
+| SDLC-002 | `update_user_email` helper, tiebreaker proven | P1 |
+| SDLC-003 | `GET /api/users/<id>` with retries | P1 |
+| SDLC-004 | Auto-created by monitor (DB error — test incident) | P0 |
+| SDLC-005 | Auto-created by monitor (DB error — recurrence dedup) | P0 |
+| SDLC-006 | `POST /api/users/<id>/deactivate` | P1 |
+| SDLC-007 | DB error handling for list, create, get | P1 |
+| SDLC-008 | Protect `deactivate_user` rollback from crashing | P1 |
+| SDLC-010 | `PUT /api/users/<id>` endpoint | P1 |
+| SDLC-011 | API key auth + identity check middleware | P0 |
+| CVE-2024-47081 | requests 2.32.3 → 2.32.4 | P2 |
+| CVE-2025-71176 | pytest insecure tmpdir | P2 |
+| Secret rotation | Hardcoded DB credentials → env vars | P0 |
+| Secret recurrence | Second hardcoded credential removal | P0 |
+
+All 14 cards are Done. See [docs/SDLC-SYSTEM.md](docs/SDLC-SYSTEM.md) for governance, scoring, and the full cron job list.
 ├── docker-compose.staging.yml # Project: sdlc-staging, port 5001
 ├── docker-compose.prod.yml    # Project: sdlc-prod, port 5002
 ├── AGENTS.md                 # Worker conventions, closed-loop rules

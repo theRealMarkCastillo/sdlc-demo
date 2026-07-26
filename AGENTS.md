@@ -30,19 +30,19 @@
 
 ## Trace Conventions
 
-Every card dispatched into this project is tracked in Langfuse (http://localhost:3000, project "Mac Mini"). Workers and reviewers must:
+Every card dispatched into this project is tracked in Langfuse (http://localhost:3000, project "Mac Mini"). Scores are emitted retroactively by the orchestrator after each stage transition — the orchestration skill handles this.
 
-1. **Capture the trace ID** from your own run. Hermes auto-exports traces to Langfuse via OpenTelemetry. The trace is tagged with `["hermes", "langfuse"]` and appears automatically.
-
-2. **Emit structured metadata on completion.** When `kanban_complete()` is called, include in metadata:
+1. **Emit structured metadata on completion.** When `kanban_complete()` is called, include in metadata:
    - `trace_id`: the active trace for observability
    - `tests_run`, `tests_passed`: numeric
    - `files_changed`: list of absolute paths
    - `decisions`: list of design decisions made
 
-3. **Keep `kanban_complete(summary=...)` under 120 characters.** The body goes in a kanban comment first if it's long.
+2. **Keep `kanban_complete(summary=...)` under 120 characters.** The body goes in a kanban comment first if it's long.
 
-4. **Reviewers reference their trace.** When a reviewer dispatches, annotate their verdict with the trace ID so the orchestrator can later score `sdlc_reviewer_thoroughness` and `sdlc_first_pass_pass`.
+3. **Reviewers reference their trace.** When a reviewer dispatches, annotate their verdict with the trace ID so the orchestrator can later score `sdlc_reviewer_thoroughness` and `sdlc_first_pass_pass`.
+
+4. **Scores are in Clickhouse, not OpenTelemetry.** The orchestrator emits scores directly to the Langfuse API. Hermes does NOT auto-export traces via OpenTelemetry — score emission is manual via the `governance_scores.py` script. Do not assume trace IDs appear automatically.
 
 Example:
 ```python
