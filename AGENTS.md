@@ -15,12 +15,18 @@
 - Validation functions should raise ValueError with descriptive messages
 - RESTful API design: proper status codes, JSON error responses
 - Never log PII
-- No hardcoded secrets — use env vars
+- No hardcoded secrets — use env vars, no defaults for credentials (`os.environ.get("DB_USER")` — no second argument)
 
 ## Security Rules (from SDLC-001 closed loop)
 - Type-coercion check: `isinstance(x, int)` accepts `bool`. Use `type(x) is int` or `isinstance(x, int) and not isinstance(x, bool)`.
 - Validate email as a string: always check `isinstance(email, str)` first.
 - Input validation at the API boundary before database operations.
+
+## Security Rules (from SDLC-009 / t_9c0bf329 closed loop)
+- Credential env vars must NOT have defaults. `os.environ.get("DB_USER", "default")` defeats the secret rotation — set defaults only for non-sensitive config (host, port, dbname).
+- `.env` files must be in `.gitignore`; provide `.env.example` with placeholder values for local dev.
+- Docker compose files must reference env vars, not literal credentials. Use `${DB_USER}` interpolation from a `.env` or `secrets:` block.
+- Tests must set required credential env vars at module load (before importing the app) so unit tests don't depend on ambient shell state.
 
 ## Trace Conventions
 
