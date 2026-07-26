@@ -21,12 +21,21 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = None
 
-# Override sqlalchemy.url from DATABASE_URL environment variable.
+# Override sqlalchemy.url. Accept DATABASE_URL if set, otherwise construct
+# from the same individual env vars the application uses so migrations run
+# inside Docker without a separate DATABASE_URL variable.
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", DATABASE_URL)
-else:
-    raise RuntimeError("DATABASE_URL must be set — cannot run migrations without a database URL")
+if not DATABASE_URL:
+    DB_HOST = os.environ.get("DB_HOST", "localhost")
+    DB_PORT = os.environ.get("DB_PORT", "5432")
+    DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
+    DB_USER = os.environ["DB_USER"]
+    DB_PASS = os.environ["DB_PASS"]
+    DATABASE_URL = (
+        f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
 def run_migrations_offline() -> None:

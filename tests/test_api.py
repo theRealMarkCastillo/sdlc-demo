@@ -660,7 +660,7 @@ def test_app_crashes_when_db_pass_missing(monkeypatch):
     # Save module globals that the reload might corrupt
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.setenv("DB_USER", "test_user")
@@ -681,7 +681,7 @@ def test_app_crashes_when_db_user_missing(monkeypatch):
 
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.setenv("DB_PASS", "test_pass")
@@ -701,7 +701,7 @@ def test_app_crashes_when_both_credentials_missing(monkeypatch):
 
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.delenv("DB_USER", raising=False)
@@ -721,7 +721,7 @@ def test_app_infra_vars_keep_defaults(monkeypatch):
 
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.setenv("DB_USER", "test_user")
@@ -1188,7 +1188,7 @@ def test_app_crashes_when_api_key_missing(monkeypatch):
 
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.setenv("DB_USER", "test_user")
@@ -1209,7 +1209,7 @@ def test_app_crashes_when_api_key_empty(monkeypatch):
 
     _saved = {k: getattr(app_module, k) for k in (
         "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME",
-        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID",
+        "SDLC_API_KEY", "SDLC_API_KEY_USER_ID", "app",
     )}
 
     monkeypatch.setenv("DB_USER", "test_user")
@@ -1226,6 +1226,64 @@ def test_app_crashes_when_api_key_empty(monkeypatch):
 # ---------------------------------------------------------------------------
 # GET /api/users?q=<search_term> — search query param
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# create_user input validation — email type + age type-coercion (SDLC-001/009)
+# ---------------------------------------------------------------------------
+
+
+def test_create_user_email_not_string():
+    """POST /api/users returns 400 when email is not a string."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": 12345,
+            "age": 30
+        })
+        assert r.status_code == 400
+        assert "string" in r.get_json()["error"].lower()
+
+
+def test_create_user_age_bool():
+    """POST /api/users returns 400 when age is a bool (type-coercion guard)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "t@t.com",
+            "age": True
+        })
+        assert r.status_code == 400
+        assert "integer" in r.get_json()["error"].lower()
+
+
+def test_create_user_age_float():
+    """POST /api/users returns 400 when age is a float (type-coercion guard)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "t@t.com",
+            "age": 30.5
+        })
+        assert r.status_code == 400
+        assert "integer" in r.get_json()["error"].lower()
+
+
+def test_create_user_age_zero_not_rejected_by_typecoercion():
+    """POST /api/users with age=0 passes type-coercion check (0 is valid int)."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.post("/api/users", headers=AUTH_HEADER, json={
+            "username": "validuser",
+            "email": "t@t.com",
+            "age": 0
+        })
+        # Type check passes; the error (if any) is from the DB, not a 400
+        assert r.status_code not in (400,)
+        # Could be 503 if DB is down or 201 if up; either is ok for this test
 
 
 def test_search_by_username():

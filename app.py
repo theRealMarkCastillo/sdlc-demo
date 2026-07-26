@@ -176,8 +176,12 @@ def create_user():
 
     if not username or len(username) < 3:
         return jsonify({"error": "username must be at least 3 chars"}), 400
+    if not isinstance(email, str):
+        return jsonify({"error": "email must be a string"}), 400
     if "@" not in email:
         return jsonify({"error": "invalid email"}), 400
+    if isinstance(age, bool) or type(age) is not int:
+        return jsonify({"error": "age must be an integer"}), 400
 
     conn = None
     cur = None
