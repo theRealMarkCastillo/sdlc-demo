@@ -360,6 +360,79 @@ def deactivate_user(user_id: str):
     })
 
 
+@app.route("/api/users/<user_id>", methods=["DELETE"])
+@require_api_key
+@require_identity_match
+def delete_user(user_id: str):
+    """Soft-delete a user by ID (sets active=false). Idempotent — deleting an
+    already-inactive user returns 200.
+
+    Args:
+        user_id: The user ID from the URL path.
+
+    Returns:
+        JSON user object with active=false on success, or error response.
+    """
+    # Validate id is a valid integer at the API boundary
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "id must be an integer"}), 400
+
+    # Reject non-positive IDs (auto-increment primary keys start at 1)
+    if uid <= 0:
+        return jsonify({"error": "id must be a positive integer"}), 400
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        # Phase 1: check existence — 404 if user doesn't exist
+        # (ensures idempotent re-deletes return 200, not 404)
+        cur.execute("SELECT id FROM users WHERE id = %s", (uid,))
+        if cur.fetchone() is None:
+            return jsonify({"error": "user not found"}), 404
+
+        # Phase 2: UPDATE...RETURNING — soft-delete by setting active=false
+        cur.execute(
+            "UPDATE users SET active = %s WHERE id = %s "
+            "RETURNING id, username, email, age, active",
+            (False, uid)
+        )
+        row = cur.fetchone()
+        conn.commit()
+    except psycopg2.Error as e:
+        app.logger.error(
+            "DB error in delete_user: %s [%s]",
+            type(e).__name__, getattr(e, 'pgcode', 'N/A')
+        )
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass  # connection dead, nothing to roll back
+        return jsonify({"error": "database unavailable"}), 503
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+    # Phase 3: UPDATE...RETURNING yielded no row — DB anomaly
+    if row is None:
+        return jsonify({"error": "database unavailable"}), 503
+
+    return jsonify({
+        "id": row[0],
+        "username": row[1],
+        "email": row[2],
+        "age": row[3],
+        "active": row[4],
+    })
+
+
 @app.route("/api/users/<user_id>", methods=["PUT"])
 @require_api_key
 @require_identity_match

@@ -221,6 +221,196 @@ def test_deactivate_user_rollback_raises(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# DELETE /api/users/<id> — soft-delete
+# ---------------------------------------------------------------------------
+
+
+def test_delete_user_success():
+    """DELETE /api/users/<id> sets active=false and returns user.
+
+    Deletes the user whose ID matches SDLC_API_KEY_USER_ID (the identity
+    mapping).  Earlier tests ensure this user exists.
+    """
+    target_id = int(os.environ.get("SDLC_API_KEY_USER_ID", "1"))
+
+    r = requests.delete(f"{BASE_URL}/api/users/{target_id}", headers=AUTH_HEADER)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == target_id
+    assert data["active"] is False
+
+    # Verify via GET that active is actually false in DB
+    r = requests.get(f"{BASE_URL}/api/users/{target_id}")
+    assert r.status_code == 200
+    assert r.json()["active"] is False
+
+
+def test_delete_user_not_found(monkeypatch):
+    """DELETE /api/users/<id> returns 404 for non-existent user.
+
+    Identity check must pass first, so we monkeypatch the key's user ID
+    to match the target ID and use a fake DB that returns no rows.
+    """
+    import app as app_module
+
+    class FakeCursor:
+        def execute(self, *args, **kwargs):
+            pass
+        def fetchone(self):
+            return None
+        def close(self):
+            pass
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 42)
+    monkeypatch.setattr(app_module, "get_db", lambda: FakeConn())
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/42", headers=AUTH_HEADER)
+        assert r.status_code == 404
+        data = r.get_json()
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+
+
+def test_delete_user_invalid_id():
+    """DELETE /api/users/<id> returns 400 for non-integer id."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/abc", headers=AUTH_HEADER)
+        assert r.status_code == 400
+        data = r.get_json()
+        assert "error" in data
+        assert "integer" in data["error"].lower()
+
+
+def test_delete_user_zero_id():
+    """DELETE /api/users/<id> returns 400 when id is zero."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/0", headers=AUTH_HEADER)
+        assert r.status_code == 400
+        data = r.get_json()
+        assert "error" in data
+        assert "positive" in data["error"].lower()
+
+
+def test_delete_user_negative_id():
+    """DELETE /api/users/<id> returns 400 when id is negative."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/-5", headers=AUTH_HEADER)
+        assert r.status_code == 400
+        data = r.get_json()
+        assert "error" in data
+        assert "positive" in data["error"].lower()
+
+
+def test_delete_user_already_inactive():
+    """DELETE /api/users/<id> is idempotent — 200 on already-inactive user."""
+    import app as app_module
+
+    class FakeCursor:
+        def __init__(self):
+            self._call = 0
+        def execute(self, *args, **kwargs):
+            pass
+        def fetchone(self):
+            self._call += 1
+            if self._call == 1:
+                return (42,)  # SELECT finds the user
+            return (42, "idempotent_test", "idempotent@example.com", 35, False)
+        def close(self):
+            pass
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+        def commit(self):
+            pass
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 42)
+    monkeypatch.setattr(app_module, "get_db", lambda: FakeConn())
+
+    # First delete
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/42", headers=AUTH_HEADER)
+        assert r.status_code == 200
+        assert r.get_json()["active"] is False
+
+    # Second delete (idempotent)
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/42", headers=AUTH_HEADER)
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["id"] == 42
+        assert data["active"] is False
+
+    monkeypatch.undo()
+
+
+def test_delete_user_missing_api_key():
+    """DELETE /api/users/<id> returns 401 when X-API-Key header is missing."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/1")
+        assert r.status_code == 401
+        assert "missing API key" in r.get_json()["error"]
+
+
+def test_delete_user_invalid_api_key():
+    """DELETE /api/users/<id> returns 401 for invalid API key."""
+    import app as app_module
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/1", headers={"X-API-Key": "wrong"})
+        assert r.status_code == 401
+        assert "invalid API key" in r.get_json()["error"]
+
+
+def test_delete_user_identity_mismatch(monkeypatch):
+    """DELETE /api/users/<id> returns 403 when API key maps to a different user."""
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/2", headers=AUTH_HEADER)
+        assert r.status_code == 403
+        data = r.get_json()
+        assert "identity mismatch" in data["error"]
+
+
+def test_delete_user_db_unavailable(monkeypatch):
+    """DELETE /api/users/<id> returns 503 when DB is unreachable."""
+    import app as app_module
+    import psycopg2
+
+    def raise_operational_error():
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(app_module, "SDLC_API_KEY_USER_ID", 1)
+    monkeypatch.setattr(app_module, "get_db", raise_operational_error)
+
+    with app_module.app.test_client() as client:
+        r = client.delete("/api/users/1", headers=AUTH_HEADER)
+        assert r.status_code == 503
+        data = r.get_json()
+        assert data["error"] == "database unavailable"
+
+
+# ---------------------------------------------------------------------------
 # DB error handling — list_users, create_user, get_user
 # ---------------------------------------------------------------------------
 
