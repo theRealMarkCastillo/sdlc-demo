@@ -28,6 +28,11 @@
 - Docker compose files must reference env vars, not literal credentials. Use `${DB_USER}` interpolation from a `.env` or `secrets:` block.
 - Tests must set required credential env vars at module load (before importing the app) so unit tests don't depend on ambient shell state.
 
+## Security Rules (from SDLC-012 / t_481f1498 closed loop)
+- **LIKE/ILIKE wildcards MUST be escaped in user-supplied search terms.** PostgreSQL interprets `%` (any sequence) and `_` (any single char) as wildcards inside bound parameter values. Before building a LIKE pattern, escape them: `safe = q.replace("%", r"\%").replace("_", r"\_")`. A bare `?q=%` must not match every row.
+- **Search inputs need validation at the API boundary.** Strip whitespace and cap length (`q = q.strip()[:200]`). Whitespace-only queries should behave as "no filter," not as literal whitespace searches.
+- **Case-insensitive search demands a case-variation test.** If the implementation uses ILIKE, a test must prove that `?q=lowercase` matches `UPPERCASE` data.
+
 ## Trace Conventions
 
 Every card dispatched into this project is tracked in Langfuse (http://localhost:3000, project "Mac Mini"). Scores are emitted retroactively by the orchestrator after each stage transition — the orchestration skill handles this.
