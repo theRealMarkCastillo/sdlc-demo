@@ -53,6 +53,16 @@ kanban_complete(
 )
 ```
 
+## Known CVE Mitigations
+
+### CVE-2025-71176 — pytest insecure tmpdir (GHSA-6w46-j5rx-g56g)
+- **Risk:** P2 — dev-only, local attack vector, no active exploitation
+- **Affected:** pytest ≤ 9.0.2 (all versions; no fix released yet)
+- **Mitigation:** `pytest.ini` + `tests/conftest.py` override basetemp to `.pytest_tmp/` (0o700) instead of `/tmp/pytest-of-{user}`
+- **Scope:** Local dev only. CI/Docker environments have ephemeral filesystem isolation
+- **Date applied:** 2026-07-26
+- **Action on upstream fix:** remove `tests/conftest.py` basetemp override and this section
+
 ## Score Conventions (see sdlc-orchestration skill)
 
 Your work is scored on these Langfuse metrics:
