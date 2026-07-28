@@ -38,9 +38,10 @@ PROJECT_NAME="sdlc-${ENV}"
 # Uses env-specific namespaced variables first (e.g., STAGING_DB_PASS),
 # falling back to the shared variable (DB_PASS) for backward compatibility.
 mkdir -p secrets
-DB_PASS_VAR="${ENV^^}_DB_PASS"
-API_KEY_VAR="${ENV^^}_SDLC_API_KEY"
-PG_PASS_VAR="${ENV^^}_POSTGRES_PASSWORD"
+ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+DB_PASS_VAR="${ENV_UPPER}_DB_PASS"
+API_KEY_VAR="${ENV_UPPER}_SDLC_API_KEY"
+PG_PASS_VAR="${ENV_UPPER}_POSTGRES_PASSWORD"
 
 DB_PASS_VAL="${!DB_PASS_VAR:-${DB_PASS:?DB_PASS and $DB_PASS_VAR are both unset}}"
 API_KEY_VAL="${!API_KEY_VAR:-${SDLC_API_KEY:?SDLC_API_KEY and $API_KEY_VAR are both unset}}"

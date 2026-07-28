@@ -53,7 +53,7 @@ class TestProjectName:
     def test_project_name_in_compose_commands(self):
         """Verify --project-name flag is present in deploy script for docker compose calls."""
         content = DEPLOY_SCRIPT.read_text()
-        compose_calls = [l for l in content.splitlines() if "docker compose" in l]
+        compose_calls = [line for line in content.splitlines() if "docker compose" in line]
         # Every docker compose call should include --project-name
         for call in compose_calls:
             assert "--project-name" in call, (
