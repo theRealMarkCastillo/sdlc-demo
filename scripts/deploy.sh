@@ -53,11 +53,9 @@ echo "  Env file:     $ENV_FILE"
 # Down old containers (keep volumes for data persistence)
 docker compose -f "$COMPOSE_FILE" --project-name "$PROJECT_NAME" down 2>/dev/null || true
 
-# Build and start
+# Start containers (secret files are read at container startup and bind-mounted;
+# they must persist on disk for the lifetime of the container.)
 docker compose -f "$COMPOSE_FILE" --project-name "$PROJECT_NAME" up -d --build
-
-# Clean up staged secret files (already read by Docker Compose during build)
-rm -f "secrets/${ENV}_db_pass.txt" "secrets/${ENV}_sdlc_api_key.txt" "secrets/${ENV}_postgres_password.txt"
 
 # Wait for health
 echo "  Waiting for healthy..."
