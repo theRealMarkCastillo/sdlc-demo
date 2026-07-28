@@ -31,12 +31,29 @@ if not DATABASE_URL:
     DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
     try:
         DB_USER = os.environ["DB_USER"]
-        DB_PASS = os.environ["DB_PASS"]
     except KeyError as e:
         raise RuntimeError(
             f"Missing required environment variable for migrations: {e.args[0]}. "
             f"Set DATABASE_URL or the DB_USER/DB_PASS pair in your environment."
         ) from e
+
+    # Support file-based Docker secrets: if DB_PASS_FILE is set, read from
+    # the file (mounted at /run/secrets/db_pass); otherwise read DB_PASS env.
+    DB_PASS = None
+    db_pass_file = os.environ.get("DB_PASS_FILE", "")
+    if db_pass_file and os.path.isfile(db_pass_file):
+        try:
+            with open(db_pass_file) as f:
+                DB_PASS = f.read().strip()
+        except OSError:
+            pass  # Fall through to env var
+    if not DB_PASS:
+        DB_PASS = os.environ.get("DB_PASS", "")
+    if not DB_PASS:
+        raise RuntimeError(
+            "Missing database password for migrations. "
+            "Set DATABASE_URL, DB_PASS_FILE, or DB_PASS."
+        )
     DATABASE_URL = (
         f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
