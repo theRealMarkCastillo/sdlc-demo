@@ -8,17 +8,40 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+
+def _read_secret(env_var: str, file_env_var: str | None = None) -> str:
+    """Read a secret from a Docker secret file if available, else from env var.
+
+    Docker Compose file-based secrets are mounted at /run/secrets/<name>.
+    The compose file sets *_FILE env vars pointing to those paths. This
+    function reads the file if it exists and is non-empty, otherwise falls
+    back to the env var. If neither provides a value, raises RuntimeError.
+    """
+    if file_env_var:
+        secret_file = os.environ.get(file_env_var, "")
+        if secret_file and os.path.isfile(secret_file):
+            try:
+                with open(secret_file) as f:
+                    val = f.read().strip()
+            except OSError:
+                pass  # Permission error etc. — fall through to env
+            else:
+                if val:
+                    return val
+    val = os.environ.get(env_var, "")
+    if not val:
+        raise RuntimeError(
+            f"Missing required secret: {env_var} (and no secret file"
+            f" {file_env_var or 'N/A'} found)"
+        )
+    return val
+
+
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
-try:
-    DB_USER = os.environ["DB_USER"]
-    DB_PASS = os.environ["DB_PASS"]
-except KeyError as e:
-    raise RuntimeError(
-        f"Missing required environment variable: {e.args[0]}. "
-        f"Copy .env.example to .env and fill in real values."
-    ) from e
+DB_USER = _read_secret("DB_USER")
+DB_PASS = _read_secret("DB_PASS", "DB_PASS_FILE")
 
 if not DB_USER or not DB_PASS:
     raise RuntimeError(
@@ -28,13 +51,7 @@ if not DB_USER or not DB_PASS:
 
 # --- Auth config ---
 
-try:
-    SDLC_API_KEY = os.environ["SDLC_API_KEY"]
-except KeyError as e:
-    raise RuntimeError(
-        f"Missing required environment variable: {e.args[0]}. "
-        f"Set it to a secure random string for API authentication."
-    ) from e
+SDLC_API_KEY = _read_secret("SDLC_API_KEY", "SDLC_API_KEY_FILE")
 
 if not SDLC_API_KEY:
     raise RuntimeError(
