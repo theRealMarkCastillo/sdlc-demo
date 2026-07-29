@@ -17,7 +17,7 @@ BASE_URL = os.environ.get("TEST_URL", "http://localhost:5000")
 # AUTH_HEADER is dynamically built so the correct key is used:
 # - Unit tests (Flask test client): os.environ.setdefault sets the test key above
 # - Integration tests (TEST_URL=...): SDLC_API_KEY must be set to the server's key
-AUTH_HEADER = {"X-API-Key": os.environ.get("SDLC_API_KEY", "test-api-key-for-sdlc-demo")}
+AUTH_HEADER = {"X-API-Key": os.environ["SDLC_API_KEY"]}
 
 
 def test_health():
