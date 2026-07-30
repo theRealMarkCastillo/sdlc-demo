@@ -6,3 +6,4 @@ secrets/
 .pytest_cache/
 .hermes/
 kanban.db
+.completion.json

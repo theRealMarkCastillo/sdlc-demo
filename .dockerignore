@@ -1,0 +1,10 @@
+.env
+.env.*
+secrets/
+.completion.json
+.git/
+*.pyc
+__pycache__/
+.pytest_cache/
+.hermes/
+kanban.db
