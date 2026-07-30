@@ -1,7 +1,11 @@
 .env
 .env.*
 secrets/
-.completion.json
+.completion*
+.venv/
+.pytest_tmp/
+.mypy_cache/
+.ruff_cache/
 .git/
 *.pyc
 __pycache__/
