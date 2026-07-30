@@ -35,9 +35,9 @@ PROJECT_NAME="sdlc-${ENV}"
 # Docker Compose reads these files at container start; they're mounted
 # at /run/secrets/<name> and are NOT visible via docker inspect.
 mkdir -p secrets
-echo "${DB_PASS}"           > "secrets/${ENV}_db_pass.txt"
-echo "${SDLC_API_KEY}"     > "secrets/${ENV}_sdlc_api_key.txt"
-echo "${POSTGRES_PASSWORD}" > "secrets/${ENV}_postgres_password.txt"
+printf '%s\n' "${DB_PASS}"           > "secrets/${ENV}_db_pass.txt"
+printf '%s\n' "${SDLC_API_KEY}"     > "secrets/${ENV}_sdlc_api_key.txt"
+printf '%s\n' "${POSTGRES_PASSWORD}" > "secrets/${ENV}_postgres_password.txt"
 chmod 600 "secrets/${ENV}_db_pass.txt" "secrets/${ENV}_sdlc_api_key.txt" "secrets/${ENV}_postgres_password.txt"
 
 # Port map for health checks — must match docker-compose.*.yml host ports

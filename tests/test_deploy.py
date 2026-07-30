@@ -1,6 +1,5 @@
 """Tests for scripts/deploy.sh — port mapping and env validation."""
 import subprocess
-import pytest
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -212,11 +211,15 @@ class TestDeploySecretStaging:
                "secrets/$ENV" in content, (
             "deploy.sh must write secrets/${ENV}_db_pass.txt"
         )
+    def test_does_not_clean_up_secret_files(self):
+        """deploy.sh must NOT delete secret files after docker compose up.
 
-    def test_cleans_up_secret_files(self):
-        """deploy.sh removes staged secret files after docker compose up."""
+        Secret files are bind-mounted into containers at runtime.
+        Deleting them breaks /run/secrets/* inside containers immediately.
+        secrets/ is already in .gitignore and .dockerignore — no cleanup needed.
+        """
         content = DEPLOY_SCRIPT.read_text()
-        # After docker compose up, there should be cleanup
+        # After docker compose up, there must be NO rm of secrets/*
         lines = content.splitlines()
         compose_up_idx = None
         for i, line in enumerate(lines):
@@ -224,10 +227,11 @@ class TestDeploySecretStaging:
                 compose_up_idx = i
                 break
         assert compose_up_idx is not None, "Could not find 'docker compose up' command"
-        # Look for cleanup after compose up
+        # Verify NO cleanup after compose up
         after_up = "\n".join(lines[compose_up_idx:])
-        assert "rm" in after_up and "secrets" in after_up, (
-            "deploy.sh must clean up secrets after docker compose up"
+        assert "secrets/" not in after_up, (
+            "deploy.sh must NOT clean up secret files after docker compose up — "
+            "files are bind-mounted and must persist"
         )
 
     def test_chmod_secret_files(self):
