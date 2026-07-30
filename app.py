@@ -8,17 +8,29 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+
+def _read_secret(name: str, env_var: str) -> str:
+    """Read a secret from a Docker secret file, falling back to an env var.
+
+    Docker Compose file-based secrets are mounted at /run/secrets/<name>.
+    Reads the file first; if it doesn't exist or can't be read, falls back
+    to os.environ[env_var]. Returns the secret value (stripped of whitespace
+    when read from file).
+    """
+    file_path = f"/run/secrets/{name}"
+    try:
+        with open(file_path) as f:
+            return f.read().strip()
+    except (FileNotFoundError, PermissionError):
+        pass
+    return os.environ[env_var]
+
+
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "sdlc_demo")
-try:
-    DB_USER = os.environ["DB_USER"]
-    DB_PASS = os.environ["DB_PASS"]
-except KeyError as e:
-    raise RuntimeError(
-        f"Missing required environment variable: {e.args[0]}. "
-        f"Copy .env.example to .env and fill in real values."
-    ) from e
+DB_USER = os.environ["DB_USER"]
+DB_PASS = _read_secret("db_pass", "DB_PASS")
 
 if not DB_USER or not DB_PASS:
     raise RuntimeError(
@@ -28,13 +40,7 @@ if not DB_USER or not DB_PASS:
 
 # --- Auth config ---
 
-try:
-    SDLC_API_KEY = os.environ["SDLC_API_KEY"]
-except KeyError as e:
-    raise RuntimeError(
-        f"Missing required environment variable: {e.args[0]}. "
-        f"Set it to a secure random string for API authentication."
-    ) from e
+SDLC_API_KEY = _read_secret("sdlc_api_key", "SDLC_API_KEY")
 
 if not SDLC_API_KEY:
     raise RuntimeError(
