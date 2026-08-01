@@ -14,14 +14,14 @@ services:
       - postgres_password
     environment:
       POSTGRES_DB: sdlc_demo
-      POSTGRES_USER: sdlc_user
+      POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     ports:
       - "5433:5432"
     volumes:
       - staging_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sdlc_user -d sdlc_demo"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d sdlc_demo"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -43,7 +43,7 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       DB_NAME: sdlc_demo
-      DB_USER: sdlc_user
+      DB_USER: ${DB_USER}
       DB_PASS_FILE: /run/secrets/db_pass
       SDLC_API_KEY_FILE: /run/secrets/sdlc_api_key
       SDLC_API_KEY_USER_ID: ${SDLC_API_KEY_USER_ID:-1}
