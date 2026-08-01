@@ -4,7 +4,6 @@ Docker Compose file-based secrets are mounted at /run/secrets/<name>.
 _read_secret(name, env_var) reads the file first, falls back to env var.
 """
 import os
-import tempfile
 import pytest
 
 
