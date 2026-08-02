@@ -92,7 +92,7 @@ in `origin/main` history as of 2026-08-01). This is the single remaining
 step to close the incident:
 
 ```bash
-cd /tmp/sdlc-filtered3.git && git remote add origin https://github.com/theRealMarkCastillo/sdlc-demo.git
+cd /tmp/sdlc-purge-final.git && git remote add origin https://github.com/theRealMarkCastillo/sdlc-demo.git
 git push --force --mirror origin
 ```
 
@@ -104,6 +104,10 @@ git log --all -p | grep -c "sdlc_pass"   # must be 0
 git log --all -p | grep -c "sdlc_user"   # must be 0
 ```
 
-**Note:** the branch `fix/rotate-staging-secrets` (6 commits ahead of
-main, incl. the compose interpolation fix) should be merged to main
-**before** the force-push so HEAD's compose files remain functional.
+**Status update (2026-08-01):** the prerequisite merge is DONE —
+`fix/rotate-staging-secrets` (compose interpolation + ruff fix + this
+change record) was merged into main as `095c614`, so HEAD's compose
+files use `${DB_USER}` interpolation and survive the purge intact.
+The filtered artifact at `/tmp/sdlc-purge-final.git` is rebuilt from
+that state: 0 secret matches (content + commit messages), 74 commits,
+13 branches preserved. Only the force-push above remains.
