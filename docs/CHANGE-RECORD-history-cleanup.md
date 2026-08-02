@@ -92,7 +92,7 @@ in `origin/main` history as of 2026-08-01). This is the single remaining
 step to close the incident:
 
 ```bash
-cd /tmp/sdlc-purge-final.git && git remote add origin https://github.com/theRealMarkCastillo/sdlc-demo.git
+cd /tmp/sdlc-purge-v2.git && git remote add origin https://github.com/theRealMarkCastillo/sdlc-demo.git
 git push --force --mirror origin
 ```
 
