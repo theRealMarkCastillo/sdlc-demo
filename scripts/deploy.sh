@@ -1,7 +1,7 @@
 #!/bin/bash
 # deploy.sh — SDLC deploy via Docker Compose
 # Usage: bash scripts/deploy.sh [staging|prod]
-# Sources .env explicitly so shell env pollution can't break compose interpolation.
+# Sources env-specific .env file and stages Docker Compose file-based secrets.
 set -euo pipefail
 
 ENV="${1:-staging}"
@@ -17,13 +17,28 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_DIR"
 
-# Source .env into a clean subshell
+# Source env-specific .env file
+ENV_FILE=".env.${ENV}"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: $ENV_FILE not found. Copy .env.example and fill in real values:"
+    echo "  cp .env.example $ENV_FILE"
+    exit 1
+fi
 set -a
-source .env
+source "$ENV_FILE"
 set +a
 
 COMPOSE_FILE="docker-compose.${ENV}.yml"
 PROJECT_NAME="sdlc-${ENV}"
+
+# Stage Docker Compose file-based secrets from env vars
+# Docker Compose reads these files at container start; they're mounted
+# at /run/secrets/<name> and are NOT visible via docker inspect.
+mkdir -p secrets
+printf '%s\n' "${DB_PASS}"           > "secrets/${ENV}_db_pass.txt"
+printf '%s\n' "${SDLC_API_KEY}"     > "secrets/${ENV}_sdlc_api_key.txt"
+printf '%s\n' "${POSTGRES_PASSWORD}" > "secrets/${ENV}_postgres_password.txt"
+chmod 600 "secrets/${ENV}_db_pass.txt" "secrets/${ENV}_sdlc_api_key.txt" "secrets/${ENV}_postgres_password.txt"
 
 # Port map for health checks — must match docker-compose.*.yml host ports
 case "$ENV" in
@@ -33,11 +48,13 @@ esac
 
 echo "=== Deploying to $ENV (project: $PROJECT_NAME, port: $APP_PORT) ==="
 echo "  Compose file: $COMPOSE_FILE"
+echo "  Env file:     $ENV_FILE"
 
 # Down old containers (keep volumes for data persistence)
 docker compose -f "$COMPOSE_FILE" --project-name "$PROJECT_NAME" down 2>/dev/null || true
 
-# Build and start
+# Start containers (secret files are read at container startup and bind-mounted;
+# they must persist on disk for the lifetime of the container.)
 docker compose -f "$COMPOSE_FILE" --project-name "$PROJECT_NAME" up -d --build
 
 # Wait for health
