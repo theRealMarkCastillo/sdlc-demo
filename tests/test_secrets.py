@@ -90,11 +90,13 @@ class TestReadSecret:
         """DB_PASS is read through _read_secret, not os.environ directly."""
         _import_read_secret()
         import app
-        # Verify app.DB_PASS is set (it should be, from setdefault above)
-        assert app.DB_PASS == "sdlc_pass_test"
+        # Compare against the env value actually in effect — a full-suite run
+        # against staging exports the real secrets, so the literal test value
+        # would not match.
+        assert app.DB_PASS == os.environ["DB_PASS"]
 
     def test_sdlc_api_key_uses_read_secret(self):
         """SDLC_API_KEY is read through _read_secret, not os.environ directly."""
         _import_read_secret()
         import app
-        assert app.SDLC_API_KEY == "test-api-key-for-sdlc-demo"
+        assert app.SDLC_API_KEY == os.environ["SDLC_API_KEY"]

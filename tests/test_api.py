@@ -3,6 +3,7 @@ import pytest
 import requests
 import os
 import psycopg2
+import uuid
 
 # Set required credential env vars so app module can be imported in unit tests.
 # Tests that verify the app crashes on missing creds use monkeypatch.delenv()
@@ -880,7 +881,14 @@ def _reload_app_with_env(**extra_env):
 
 
 def test_app_crashes_when_db_pass_missing(monkeypatch):
-    """app.py raises RuntimeError on import when DB_PASS env var is not set."""
+    """app.py raises KeyError on import when DB_PASS env var is not set.
+
+    _read_secret() falls back to os.environ[env_var], which raises
+    KeyError when the env var is absent (RuntimeError only fires for an
+    *empty* value). The save/restore below runs because the KeyError is
+    caught — this keeps the partially-reloaded module from poisoning
+    later tests.
+    """
     import importlib
     import app as app_module
 
@@ -893,7 +901,7 @@ def test_app_crashes_when_db_pass_missing(monkeypatch):
     monkeypatch.setenv("DB_USER", "test_user")
     monkeypatch.delenv("DB_PASS", raising=False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         importlib.reload(app_module)
 
     # Restore globals from saved values — monkeypatch hasn't restored env yet
@@ -902,7 +910,11 @@ def test_app_crashes_when_db_pass_missing(monkeypatch):
 
 
 def test_app_crashes_when_db_user_missing(monkeypatch):
-    """app.py raises RuntimeError on import when DB_USER env var is not set."""
+    """app.py raises KeyError on import when DB_USER env var is not set.
+
+    DB_USER is read via os.environ["DB_USER"], which raises KeyError when
+    absent (RuntimeError only fires for an *empty* value).
+    """
     import importlib
     import app as app_module
 
@@ -914,7 +926,7 @@ def test_app_crashes_when_db_user_missing(monkeypatch):
     monkeypatch.setenv("DB_PASS", "test_pass")
     monkeypatch.delenv("DB_USER", raising=False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         importlib.reload(app_module)
 
     for k, v in _saved.items():
@@ -922,7 +934,7 @@ def test_app_crashes_when_db_user_missing(monkeypatch):
 
 
 def test_app_crashes_when_both_credentials_missing(monkeypatch):
-    """app.py raises RuntimeError when both DB_USER and DB_PASS are missing."""
+    """app.py raises KeyError when both DB_USER and DB_PASS are missing."""
     import importlib
     import app as app_module
 
@@ -934,7 +946,7 @@ def test_app_crashes_when_both_credentials_missing(monkeypatch):
     monkeypatch.delenv("DB_USER", raising=False)
     monkeypatch.delenv("DB_PASS", raising=False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         importlib.reload(app_module)
 
     for k, v in _saved.items():
@@ -1010,6 +1022,13 @@ def test_update_user_success():
     """
     target_id = int(os.environ.get("SDLC_API_KEY_USER_ID", "1"))
 
+    # The identity-mapped user may have been soft-deleted by an earlier test
+    # in this run (test_delete_user_success) or by a previous run against the
+    # persistent staging DB. PUT must not change the active flag either way.
+    r0 = requests.get(f"{BASE_URL}/api/users/{target_id}")
+    assert r0.status_code == 200
+    active_before = r0.json()["active"]
+
     # Update all three fields on the mapped user
     r = requests.put(f"{BASE_URL}/api/users/{target_id}", json={
         "username": "updated_name",
@@ -1022,7 +1041,7 @@ def test_update_user_success():
     assert data["username"] == "updated_name"
     assert data["email"] == "updated@example.com"
     assert data["age"] == 35
-    assert data["active"] is True  # active unchanged
+    assert data["active"] is active_before  # active unchanged
 
     # Verify via GET
     r = requests.get(f"{BASE_URL}/api/users/{target_id}")
@@ -1039,6 +1058,10 @@ def test_update_user_partial():
     """
     target_id = int(os.environ.get("SDLC_API_KEY_USER_ID", "1"))
 
+    r0 = requests.get(f"{BASE_URL}/api/users/{target_id}")
+    assert r0.status_code == 200
+    active_before = r0.json()["active"]
+
     # Update only username on the mapped user
     r = requests.put(f"{BASE_URL}/api/users/{target_id}", json={
         "username": "only_username_changed"
@@ -1046,7 +1069,7 @@ def test_update_user_partial():
     assert r.status_code == 200
     data = r.json()
     assert data["username"] == "only_username_changed"
-    assert data["active"] is True
+    assert data["active"] is active_before
 
 
 def test_update_user_not_found():
@@ -1409,7 +1432,13 @@ def test_update_user_identity_mapping_not_configured(monkeypatch):
 
 
 def test_app_crashes_when_api_key_missing(monkeypatch):
-    """app.py raises RuntimeError on import when SDLC_API_KEY is not set."""
+    """app.py raises KeyError on import when SDLC_API_KEY is not set.
+
+    _read_secret() falls back to os.environ[env_var], which raises
+    KeyError when the env var is absent (RuntimeError only fires for an
+    *empty* key). Catching the right exception keeps the save/restore
+    running so the partial reload can't poison later tests.
+    """
     import importlib
     import app as app_module
 
@@ -1422,7 +1451,7 @@ def test_app_crashes_when_api_key_missing(monkeypatch):
     monkeypatch.setenv("DB_PASS", "test_pass")
     monkeypatch.delenv("SDLC_API_KEY", raising=False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         importlib.reload(app_module)
 
     for k, v in _saved.items():
@@ -1658,11 +1687,15 @@ def test_search_by_username():
 
 def test_search_by_email():
     """GET /api/users?q=<term> returns users whose email contains the term."""
-    # Create users with distinct emails
+    # Unique emails per run — the persistent staging DB accumulates rows
+    # across runs, so an exact count against a fixed term like "beta" would
+    # grow. Assert that this run's fixture is present and that every result
+    # genuinely matches the term (filter correctness) instead.
+    run_token = uuid.uuid4().hex[:8]
     for i, domain in enumerate(("alpha.com", "beta.org", "gamma.net"), 1):
         r = requests.post(f"{BASE_URL}/api/users", json={
-            "username": f"email_test_{i}",
-            "email": f"user{i}@{domain}",
+            "username": f"email_test_{i}_{run_token}",
+            "email": f"user{i}-{run_token}@{domain}",
             "age": 25
         }, headers=AUTH_HEADER)
         assert r.status_code == 201
@@ -1670,8 +1703,13 @@ def test_search_by_email():
     r = requests.get(f"{BASE_URL}/api/users", params={"q": "beta"})
     assert r.status_code == 200
     users = r.json()
-    assert len(users) == 1
-    assert users[0]["email"] == "user2@beta.org"
+    # Every result must actually contain the term (matches the app's
+    # `username ILIKE %s OR email ILIKE %s` filter)...
+    assert all(
+        "beta" in u["email"] or "beta" in u["username"] for u in users
+    )
+    # ...and this run's beta.org fixture must be among them.
+    assert any(u["email"] == f"user2-{run_token}@beta.org" for u in users)
 
 
 def test_search_no_results():
@@ -1714,20 +1752,24 @@ def test_search_empty_q_returns_all():
 
 def test_search_special_characters():
     """GET /api/users?q=<term> handles special characters safely."""
-    # Create a user with special chars in username for realistic testing
+    # Unique username per run — the persistent staging DB accumulates rows
+    # across runs, so search for this run's unique fragment to keep the
+    # exact-count assertion deterministic.
+    run_token = uuid.uuid4().hex[:8]
+    username = f"user_with_underscore_{run_token}"
     r = requests.post(f"{BASE_URL}/api/users", json={
-        "username": "user_with_underscore",
-        "email": "underscore@example.com",
+        "username": username,
+        "email": f"underscore_{run_token}@example.com",
         "age": 25
     }, headers=AUTH_HEADER)
     assert r.status_code == 201
 
     # Search with underscore — should find the user
-    r = requests.get(f"{BASE_URL}/api/users", params={"q": "underscore"})
+    r = requests.get(f"{BASE_URL}/api/users", params={"q": f"underscore_{run_token}"})
     assert r.status_code == 200
     users = r.json()
     assert len(users) == 1
-    assert users[0]["username"] == "user_with_underscore"
+    assert users[0]["username"] == username
 
     # Search with percent sign — now escaped, should not crash, return empty
     r = requests.get(f"{BASE_URL}/api/users", params={"q": "%"})
