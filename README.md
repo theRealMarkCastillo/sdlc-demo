@@ -151,3 +151,13 @@ These are set in the docker-compose files; a `.env` file is required for local d
 ## Project Path
 
 This repo lives at `~/git/sdlc-demo/`. The path is stored as the env var `SDLC_DEMO_PATH` in `~/.hermes/.env`. Cron jobs and subagent prompts use `${SDLC_DEMO_PATH}` for substitution.
+
+## Local configuration and generated files
+
+The following files are local-only and ignored by Git:
+
+- `kanban.db`
+
+Before pulling the commit that untracks them, back up any configured copies
+outside the checkout. Git may remove the formerly tracked files during the
+update; restore your copies afterward. Do not force-add them.

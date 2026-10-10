@@ -8,3 +8,8 @@ secrets/
 kanban.db
 .completion*
 .pytest_tmp/
+
+# Keep machine-specific configuration and generated local artifacts out of Git.
+/kanban.db
+/kanban.db-wal
+/kanban.db-shm
