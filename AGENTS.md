@@ -100,3 +100,8 @@ Your work is scored on these Langfuse metrics:
 | `sdlc_reviewer_thoroughness` | Review quality | shallow=1 / adequate=2 / thorough=3 |
 
 Scores are emitted automatically by the orchestrator at each stage transition. You don't need to score yourself — just emit trace IDs and structured metadata, and the orchestrator handles the rest.
+
+<!-- entire-agent:begin -->
+Read .entire/agent-guide.md for this repository's workflow, source inspection, and verification guidance.
+@.entire/agent-guide.md
+<!-- entire-agent:end -->
